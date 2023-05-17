@@ -1,0 +1,221 @@
+package model
+
+import (
+	"context"
+	"fmt"
+	"go.uber.org/zap"
+	"io"
+	"math/rand"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Proxy struct {
+	logger      *zap.SugaredLogger
+	minZoom     int
+	maxZoom     int
+	name        string
+	key         string
+	tms         bool
+	path        string
+	url         string
+	ext         string
+	sub         []string
+	timeout     time.Duration
+	httpTimeout time.Duration
+
+	urlGetter func(z, x, y int) string
+
+	Offline         bool
+	keepProbability float32
+
+	t1 *Tile
+	t2 *Tile
+}
+
+func (p *Proxy) GetName() string {
+	return p.name
+}
+
+func (p *Proxy) GetKey() string {
+	return p.key
+}
+
+func (p *Proxy) GetMinZoom() int {
+	return p.minZoom
+}
+
+func (p *Proxy) GetMaxZoom() int {
+	return p.maxZoom
+}
+
+func (p *Proxy) GetContentType() string {
+	switch p.ext {
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	default:
+		return "image/png"
+	}
+}
+
+func (p *Proxy) IsTms() bool {
+	return p.tms
+}
+
+func (p *Proxy) IsFile() bool {
+	return false
+}
+
+func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
+	if z < p.minZoom || z > p.maxZoom {
+		return nil, fmt.Errorf("invalid zoom")
+	}
+
+	if p.t1 != nil && p.t2 != nil && !(&Tile{X: x, Y: y, Z: z}).InRect(p.t1, p.t2) {
+		return nil, fmt.Errorf("border")
+	}
+
+	if p.tms {
+		y = 1<<z - y - 1
+	}
+
+	fpath := path.Join(p.path, fmt.Sprintf("z%d/%d/x%d/%d", z, int(x/1024), x, int(y/1024)))
+	fname := fmt.Sprintf("y%d.%s", y, p.ext)
+
+	st, err := os.Stat(path.Join(fpath, fname))
+
+	if err != nil {
+		return p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+	}
+
+	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
+		p.logger.Infof("hit")
+		return os.ReadFile(path.Join(fpath, fname))
+	}
+
+	if rand.Float32() < p.keepProbability {
+		p.logger.Infof("miss, but serve")
+		return os.ReadFile(path.Join(fpath, fname))
+	}
+
+	p.logger.Infof("miss")
+	data, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+
+	// backup - return file if any
+	if err != nil {
+		return os.ReadFile(path.Join(fpath, fname))
+	}
+
+	return data, nil
+}
+
+func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) ([]byte, error) {
+	if p.Offline {
+		return nil, fmt.Errorf("offline")
+	}
+
+	cl := &http.Client{Timeout: p.httpTimeout}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := cl.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%s error %s\n", url, resp.Status)
+	}
+
+	if resp.Body == nil {
+		return nil, fmt.Errorf("nil body")
+	}
+
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(fpath, 0755); err != nil {
+		return nil, err
+	}
+
+	fl, err := os.Create(path.Join(fpath, fname))
+
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = fl.Write(data); err != nil {
+		return data, err
+	}
+
+	fl.Close()
+
+	return data, nil
+}
+
+func (p *Proxy) GetUrl(z, x, y int) string {
+	if p.urlGetter == nil {
+		url := strings.ReplaceAll(p.url, "{z}", strconv.Itoa(z))
+		url = strings.ReplaceAll(url, "{x}", strconv.Itoa(x))
+		url = strings.ReplaceAll(url, "{y}", strconv.Itoa(y))
+		if len(p.sub) > 0 {
+			i := rand.Intn(len(p.sub))
+			url = strings.ReplaceAll(url, "{s}", p.sub[i])
+		}
+		return url
+	}
+
+	return p.urlGetter(z, x, y)
+}
+
+func GoogleHybrid(logger *zap.SugaredLogger, path string) *Proxy {
+	return &Proxy{
+		logger:          logger,
+		minZoom:         2,
+		maxZoom:         19,
+		keepProbability: 0.5,
+		key:             "google_h",
+		name:            "Google hybrid",
+		tms:             false,
+		path:            filepath.Join(path, "tiles", "google_hybrid"),
+		ext:             "jpg",
+		timeout:         time.Hour * 24 * 30,
+		httpTimeout:     time.Second * 5,
+		url:             "http://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&s=Galileo",
+		sub:             []string{"0", "1", "2", "3"},
+	}
+}
+
+func OpenTopoCZ(logger *zap.SugaredLogger, path string) *Proxy {
+	return &Proxy{
+		logger:          logger,
+		minZoom:         2,
+		maxZoom:         18,
+		keepProbability: 0.7,
+		key:             "opentopo_cz",
+		name:            "Opentopo CZ",
+		tms:             false,
+		path:            filepath.Join(path, "tiles", "opentopo_cz"),
+		url:             "https://tile-{s}.opentopomap.cz/{z}/{x}/{y}.png",
+		ext:             "png",
+		sub:             []string{"a", "b", "c"},
+		timeout:         time.Hour * 24 * 7,
+		httpTimeout:     time.Second * 10,
+	}
+}
