@@ -26,7 +26,7 @@ update:
 	rm go.sum; go get -u ./...
 
 .PHONY: test
-test:
+test: clean dep
 	go test -v ./...
 
 .PHONY: build
