@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/gofiber/fiber/v2 v2.52.0
 	go.uber.org/zap v1.26.0
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.23.1
 )
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -10,6 +9,7 @@ import (
 	"syscall"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 
 	"github.com/kdudkov/tileproxy/pkg/model"
 )
@@ -17,29 +17,42 @@ import (
 type App struct {
 	addr   string
 	logger *zap.SugaredLogger
-	layers map[string]model.Source
+	layers []model.Source
 }
 
 func NewApp(logger *zap.SugaredLogger, addr string) *App {
 	return &App{
-		layers: make(map[string]model.Source),
+		layers: nil,
 		logger: logger,
 		addr:   addr,
 	}
 }
 
-func (app *App) addFefaultSources(path string) {
-	for _, p := range []model.Source{model.GoogleHybrid(app.logger, path), model.OpenTopoCZ(app.logger, path)} {
-		app.layers[p.GetKey()] = p
+func (app *App) addDefaultSources(path string) error {
+	d, err := os.ReadFile("layers.yml")
+
+	if err != nil {
+		return err
 	}
+
+	var res []*model.LayerDescription
+
+	if err := yaml.Unmarshal(d, &res); err != nil {
+		return err
+	}
+
+	for _, l := range res {
+		p := model.NewProxy(l, app.logger, path)
+		app.layers = append(app.layers, p)
+	}
+
+	return nil
 }
 
-func (app *App) Run(rootPath string) {
-	app.addFefaultSources(rootPath)
-
+func (app *App) addFileSources(rootPath string) error {
 	files, err := os.ReadDir(rootPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	for _, f := range files {
@@ -53,19 +66,29 @@ func (app *App) Run(rootPath string) {
 		}
 
 		if _, err := os.Stat(p); err != nil {
-			fmt.Printf("invalid file: %s\n", p)
+			app.logger.Errorf("invalid file %s: %v", p, err)
 			continue
 		}
 
 		l, err := model.NewLayer(f.Name(), p)
 		if err != nil {
-			fmt.Printf("db open error: %v\n", err)
+			app.logger.Errorf("db open error: %v", err)
 			continue
 		}
 
-		app.layers[l.GetKey()] = l
+		app.layers = append(app.layers, l)
+	}
 
-		app.logger.Infof("got layer %s", l)
+	return nil
+}
+
+func (app *App) Run(rootPath string) {
+	if err := app.addDefaultSources(rootPath); err != nil {
+		panic(err)
+	}
+
+	if err := app.addFileSources(rootPath); err != nil {
+		panic(err)
 	}
 
 	http := NewHttp(app)

@@ -3,7 +3,6 @@ package model
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"math/rand"
 	"net/http"
@@ -13,19 +12,21 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Proxy struct {
 	logger      *zap.SugaredLogger
-	minZoom     int
-	maxZoom     int
 	name        string
 	key         string
+	minZoom     int
+	maxZoom     int
 	tms         bool
 	path        string
 	url         string
 	ext         string
-	sub         []string
+	serverParts []string
 	timeout     time.Duration
 	httpTimeout time.Duration
 
@@ -92,20 +93,21 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
 	st, err := os.Stat(path.Join(fpath, fname))
 
 	if err != nil {
+		p.logger.Debugf("miss")
 		return p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 	}
 
 	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
-		p.logger.Infof("hit")
+		p.logger.Debugf("hit")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
 	if rand.Float32() < p.keepProbability {
-		p.logger.Infof("miss, but serve")
+		p.logger.Debugf("keep")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
-	p.logger.Infof("miss")
+	p.logger.Debugf("timeout")
 	data, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 
 	// backup - return file if any
@@ -174,10 +176,12 @@ func (p *Proxy) GetUrl(z, x, y int) string {
 		url := strings.ReplaceAll(p.url, "{z}", strconv.Itoa(z))
 		url = strings.ReplaceAll(url, "{x}", strconv.Itoa(x))
 		url = strings.ReplaceAll(url, "{y}", strconv.Itoa(y))
-		if len(p.sub) > 0 {
-			i := rand.Intn(len(p.sub))
-			url = strings.ReplaceAll(url, "{s}", p.sub[i])
+
+		if len(p.serverParts) > 0 {
+			i := rand.Intn(len(p.serverParts))
+			url = strings.ReplaceAll(url, "{s}", p.serverParts[i])
 		}
+
 		return url
 	}
 
@@ -198,7 +202,7 @@ func GoogleHybrid(logger *zap.SugaredLogger, path string) *Proxy {
 		timeout:         time.Hour * 24 * 30,
 		httpTimeout:     time.Second * 5,
 		url:             "http://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&s=Galileo",
-		sub:             []string{"0", "1", "2", "3"},
+		serverParts:     []string{"0", "1", "2", "3"},
 	}
 }
 
@@ -214,7 +218,7 @@ func OpenTopoCZ(logger *zap.SugaredLogger, path string) *Proxy {
 		path:            filepath.Join(path, "tiles", "opentopo_cz"),
 		url:             "https://tile-{s}.opentopomap.cz/{z}/{x}/{y}.png",
 		ext:             "png",
-		sub:             []string{"a", "b", "c"},
+		serverParts:     []string{"a", "b", "c"},
 		timeout:         time.Hour * 24 * 7,
 		httpTimeout:     time.Second * 10,
 	}

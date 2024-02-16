@@ -9,6 +9,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/redirect"
+
+	"github.com/kdudkov/tileproxy/pkg/model"
 )
 
 //go:embed static/*
@@ -42,9 +44,9 @@ func NewHttp(app *App) *fiber.App {
 func getLayersHandler(app *App) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		r := make([]map[string]interface{}, 0)
-		for key, l := range app.layers {
+		for _, l := range app.layers {
 			ld := make(map[string]interface{})
-			ld["url"] = "/tiles/" + key + "/{z}/{x}/{y}"
+			ld["url"] = "/tiles/" + l.GetKey() + "/{z}/{x}/{y}"
 			ld["minzoom"] = l.GetMinZoom()
 			ld["maxzoom"] = l.GetMaxZoom()
 			ld["name"] = l.GetName()
@@ -74,17 +76,20 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 			return fmt.Errorf("error: invalid y value")
 		}
 
-		if _, ok := app.layers[name]; !ok {
-			return fmt.Errorf("invalid name")
+		var layer model.Source
+
+		for _, l := range app.layers {
+			if l.GetKey() == name {
+				layer = l
+				break
+			}
 		}
 
-		l, ok := app.layers[name]
-
-		if !ok {
+		if layer == nil {
 			return c.Status(fiber.StatusNotFound).SendString(fmt.Sprintf("layer %s is not found", name))
 		}
 
-		data, err := l.GetTile(c.Context(), zoom, x, y)
+		data, err := layer.GetTile(c.Context(), zoom, x, y)
 
 		if err != nil {
 			fmt.Println(err)
@@ -92,7 +97,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 		}
 
 		if data != nil {
-			c.Set("Content-Type", l.GetContentType())
+			c.Set("Content-Type", layer.GetContentType())
 			_, err := c.Write(data)
 			return err
 		}
