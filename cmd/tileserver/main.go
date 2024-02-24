@@ -15,9 +15,11 @@ import (
 )
 
 type App struct {
-	addr   string
-	logger *zap.SugaredLogger
-	layers []model.Source
+	addr     string
+	filesDir string
+	cacheDir string
+	logger   *zap.SugaredLogger
+	layers   []model.Source
 }
 
 func NewApp(logger *zap.SugaredLogger, addr string) *App {
@@ -28,7 +30,7 @@ func NewApp(logger *zap.SugaredLogger, addr string) *App {
 	}
 }
 
-func (app *App) addDefaultSources(path string) error {
+func (app *App) addDefaultSources() error {
 	d, err := os.ReadFile("layers.yml")
 
 	if err != nil {
@@ -42,21 +44,21 @@ func (app *App) addDefaultSources(path string) error {
 	}
 
 	for _, l := range res {
-		p := model.NewProxy(l, app.logger, path)
+		p := model.NewProxy(l, app.logger, app.cacheDir)
 		app.layers = append(app.layers, p)
 	}
 
 	return nil
 }
 
-func (app *App) addFileSources(rootPath string) error {
-	files, err := os.ReadDir(rootPath)
+func (app *App) addFileSources() error {
+	files, err := os.ReadDir(app.filesDir)
 	if err != nil {
 		return err
 	}
 
 	for _, f := range files {
-		p := path.Join(rootPath, f.Name())
+		p := path.Join(app.filesDir, f.Name())
 		if f.IsDir() {
 			continue
 		}
@@ -82,12 +84,12 @@ func (app *App) addFileSources(rootPath string) error {
 	return nil
 }
 
-func (app *App) Run(rootPath string) {
-	if err := app.addDefaultSources(rootPath); err != nil {
+func (app *App) Run() {
+	if err := app.addDefaultSources(); err != nil {
 		panic(err)
 	}
 
-	if err := app.addFileSources(rootPath); err != nil {
+	if err := app.addFileSources(); err != nil {
 		panic(err)
 	}
 
@@ -117,7 +119,8 @@ func (app *App) loop() {
 }
 
 func main() {
-	var dir = flag.String("path", ".", "mbtiles path")
+	var filesDir = flag.String("files", ".", "mbtiles path")
+	var cacheDir = flag.String("cache", ".", "cache path")
 	var addr = flag.String("addr", "localhost:8080", "listen address")
 	var debug = flag.Bool("debug", false, "")
 
@@ -135,5 +138,7 @@ func main() {
 	defer logger.Sync()
 
 	app := NewApp(logger.Sugar(), *addr)
-	app.Run(*dir)
+	app.filesDir = *filesDir
+	app.cacheDir = *cacheDir
+	app.Run()
 }

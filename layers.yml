@@ -3,7 +3,7 @@
   name: Google hybrid
   minZoom: 2
   maxZoom: 19
-  keepProbability: 0.5
+  keepProbability: 0.8
   tileType: jpg
   url: "http://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&s=Galileo"
   serverParts: [ "0", "1", "2", "3" ]
@@ -12,7 +12,7 @@
   name: Opentopo CZ
   minZoom: 2
   maxZoom: 18
-  keepProbability: 0.7
+  keepProbability: 0.5
   url: "https://tile-{s}.opentopomap.cz/{z}/{x}/{y}.png"
   tileType: png
   serverParts: [ "a", "b", "c" ]
@@ -21,7 +21,7 @@
   name: Yandex map
   minZoom: 2
   maxZoom: 20
-  keepProbability: 0.5
+  keepProbability: 0.8
   tileType: png
   url: "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&projection=web_mercator&lang=ru_RU"
   timeout: 720h
