@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
@@ -46,7 +47,7 @@ func getLayersHandler(app *App) func(c *fiber.Ctx) error {
 		r := make([]map[string]interface{}, 0)
 		for _, l := range app.layers {
 			ld := make(map[string]interface{})
-			ld["url"] = "/tiles/" + l.GetKey() + "/{z}/{x}/{y}"
+			ld["url"] = "/tiles/" + url.QueryEscape(l.GetKey()) + "/{z}/{x}/{y}"
 			ld["minzoom"] = l.GetMinZoom()
 			ld["maxzoom"] = l.GetMaxZoom()
 			ld["name"] = l.GetName()
@@ -62,7 +63,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 		var err error
 		var zoom, x, y int
 
-		name := c.Params("name")
+		name, _ := url.QueryUnescape(c.Params("name"))
 
 		if zoom, err = c.ParamsInt("zoom"); err != nil {
 			return fmt.Errorf("error: invalid zoom value")
