@@ -1,11 +1,10 @@
 package model
 
 import (
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type LayerDescription struct {
@@ -21,7 +20,7 @@ type LayerDescription struct {
 	KeepProbability float32       `yaml:"keepProbability"`
 }
 
-func NewProxy(l *LayerDescription, logger *zap.SugaredLogger, path string) *Proxy {
+func NewProxy(l *LayerDescription, logger *slog.Logger, path string) *Proxy {
 	return &Proxy{
 		logger:          logger,
 		minZoom:         l.MinZoom,

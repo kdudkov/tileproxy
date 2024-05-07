@@ -2,13 +2,13 @@ package main
 
 import (
 	"flag"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path"
 	"strings"
 	"syscall"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
 	"github.com/kdudkov/tileproxy/pkg/model"
@@ -18,14 +18,14 @@ type App struct {
 	addr     string
 	filesDir string
 	cacheDir string
-	logger   *zap.SugaredLogger
+	logger   *slog.Logger
 	layers   []model.Source
 }
 
-func NewApp(logger *zap.SugaredLogger, addr string) *App {
+func NewApp(addr string) *App {
 	return &App{
 		layers: nil,
-		logger: logger,
+		logger: slog.Default(),
 		addr:   addr,
 	}
 }
@@ -68,13 +68,13 @@ func (app *App) addFileSources() error {
 		}
 
 		if _, err := os.Stat(p); err != nil {
-			app.logger.Errorf("invalid file %s: %v", p, err)
+			app.logger.Error("invalid file "+p, "error", err)
 			continue
 		}
 
 		l, err := model.NewLayer(f.Name(), p)
 		if err != nil {
-			app.logger.Errorf("db open error: %v", err)
+			app.logger.Error("db open error", "error", err)
 			continue
 		}
 
@@ -95,7 +95,7 @@ func (app *App) Run() {
 
 	http := NewHttp(app)
 
-	app.logger.Infof("listening on %s", app.addr)
+	app.logger.Info("listening on " + app.addr)
 
 	go func() {
 		if err := http.Listen(app.addr); err != nil {
@@ -126,18 +126,16 @@ func main() {
 
 	flag.Parse()
 
-	var cfg zap.Config
+	var h slog.Handler
 	if *debug {
-		cfg = zap.NewDevelopmentConfig()
+		h = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 	} else {
-		cfg = zap.NewProductionConfig()
-		cfg.Encoding = "console"
+		h = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	}
 
-	logger, _ := cfg.Build()
-	defer logger.Sync()
+	slog.SetDefault(slog.New(h))
 
-	app := NewApp(logger.Sugar(), *addr)
+	app := NewApp(*addr)
 	app.filesDir = *filesDir
 	app.cacheDir = *cacheDir
 	app.Run()

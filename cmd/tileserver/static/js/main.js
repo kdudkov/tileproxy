@@ -3,10 +3,11 @@ let app = new Vue({
     data: {
         map: null,
         layers: null,
+        grid: null,
         ts: 0,
         zoom: 10,
         keys: new Set(),
-        coeff: 2,
+        dz: 3,
         filename: "tiles",
     },
 
@@ -23,7 +24,7 @@ let app = new Vue({
 
 
         this.get_layers();
-        this.map.on('click', this.click);
+        this.map.on('click', this.onClick);
         this.map.on('zoom', this.onZoom)
     },
 
@@ -63,14 +64,14 @@ let app = new Vue({
                         }
                     });
 
-                    let grid = new L.GridLayer.GridDebug({tileSize: 256 / this.coeff, zIndex: 0});
-                    layers.addOverlay(grid, "grid");
-                    grid.bringToFront();
+                    th.grid = new L.GridLayer.GridDebug({tileSize: 256 / 2 ^ th.dz, zIndex: 0});
+                    th.layers.addOverlay(th.grid, "grid");
+                    th.grid.bringToFront();
                 });
         },
 
         draw_tile: function (coords) {
-            let key = [coords.z + this.coeff - 1, coords.x, coords.y].join('/');
+            let key = [coords.z + this.dz, coords.x, coords.y].join('/');
 
             const tile = document.createElement('div');
 
@@ -83,11 +84,11 @@ let app = new Vue({
             return tile;
         },
 
-        click: function (e) {
+        onClick: function (e) {
             // console.log(e);
-            let ts = this.grid.getTileSize().x;
+            let ts = 256 / 2 ^ this.dz;
             let p = this.map.project(e.latlng, this.map.getZoom());
-            let key = [this.map.getZoom() + this.coeff - 1, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
+            let key = [this.map.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
             console.log(key);
 
             if (this.keys.has(key)) {
@@ -104,7 +105,7 @@ let app = new Vue({
         },
 
         copy_up: function () {
-            let z = this.map.getZoom() + this.coeff - 2;
+            let z = this.map.getZoom() + this.dz - 1;
             for (let k of this.keys) {
                 if (k.startsWith(z + "/")) {
                     let n = k.split('/');
@@ -129,6 +130,16 @@ let app = new Vue({
         },
         clear: function () {
             this.keys.clear();
+            this.grid.redraw();
+        },
+        clear_zoom: function () {
+            let z = this.map.getZoom()
+            for (let k of this.keys) {
+                if (k.startsWith(z + "/")) {
+                    this.keys.delete(key);
+                }
+            }
+            this.ts = this.keys.size;
             this.grid.redraw();
         }
     }

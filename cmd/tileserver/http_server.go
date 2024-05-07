@@ -93,13 +93,17 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 		data, err := layer.GetTile(c.Context(), zoom, x, y)
 
 		if err != nil {
-			fmt.Println(err)
+			app.logger.Error("error getting tile", "error", err)
 			return err
 		}
 
 		if data != nil {
 			c.Set("Content-Type", layer.GetContentType())
 			_, err := c.Write(data)
+			if err != nil {
+				app.logger.Error("error writing response", "error", err)
+			}
+
 			return err
 		}
 

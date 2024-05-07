@@ -8,13 +8,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/kdudkov/tileproxy/pkg/model"
+	_ "modernc.org/sqlite"
 )
 
 type App struct {
@@ -44,11 +44,12 @@ func (app *App) GetType() string {
 
 func (app *App) Run() error {
 	if app.layer == nil {
+		fmt.Println("no layer!")
 		return nil
 	}
 
 	_ = os.Remove(app.dbFilename)
-	db, err := sql.Open("sqlite3", app.dbFilename)
+	db, err := sql.Open("sqlite", app.dbFilename)
 
 	if err != nil {
 		return err
@@ -60,6 +61,7 @@ func (app *App) Run() error {
 		return err
 	}
 
+	fmt.Printf("start reading file %s\n", app.tilesFilename)
 	f, err := os.Open(app.tilesFilename)
 
 	if err != nil {
@@ -73,14 +75,14 @@ func (app *App) Run() error {
 	minzoom, maxzoom := 0, 0
 	total := 0
 
+	ctx := context.Background()
+
 	for {
 		ln, readerr := r.ReadString('\n')
 
-		if !errors.Is(readerr, io.EOF) {
-			return err
+		if readerr != nil && !errors.Is(readerr, io.EOF) {
+			return readerr
 		}
-
-		ctx := context.Background()
 
 		if ln != "" {
 			d := strings.Split(strings.Trim(ln, "\n\r "), "/")
@@ -109,12 +111,12 @@ func (app *App) Run() error {
 
 			total += 1
 
-			if z < minzoom || minzoom == 0 {
+			if minzoom == 0 {
 				minzoom = z
 			}
-			if z > maxzoom || maxzoom == 0 {
-				maxzoom = z
-			}
+
+			minzoom = min(minzoom, z)
+			maxzoom = max(maxzoom, z)
 		}
 
 		if errors.Is(readerr, io.EOF) {
@@ -135,7 +137,8 @@ func (app *App) Run() error {
 		return err
 	}
 
-	fmt.Println(total)
+	fmt.Printf("zoom: %d - %d\n", minzoom, maxzoom)
+	fmt.Printf("total tiles: %d\n", total)
 
 	return nil
 }
@@ -171,12 +174,33 @@ func putMeta(db *sql.DB, meta map[string]string) error {
 
 func main() {
 	var dir = flag.String("path", ".", "mbtiles path")
+	var layer = flag.String("layer", "", "layer")
 
 	flag.Parse()
 
-	err := NewApp(model.GoogleHybrid(zap.S(), *dir), "goog_pes.mbtiles", "goog_pes").Run()
+	if len(flag.Args()) != 1 {
+		fmt.Println("no file name")
+		return
+	}
+
+	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+
+	var proxy model.Source
+
+	switch *layer {
+	case "google_h", "google":
+		proxy = model.GoogleHybrid(slog.Default(), *dir)
+	case "topo":
+		proxy = model.OpenTopoCZ(slog.Default(), *dir)
+	default:
+		fmt.Println("you need to specify a proxy: google or topo")
+		return
+	}
+
+	err := NewApp(proxy, flag.Arg(0)+".mbtiles", flag.Arg(0)).Run()
 
 	if err != nil {
-		fmt.Printf("error: %s", err.Error())
+		fmt.Printf("error: %s\n", err.Error())
 	}
 }

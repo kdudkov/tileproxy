@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"os"
@@ -12,12 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type Proxy struct {
-	logger      *zap.SugaredLogger
+	logger      *slog.Logger
 	name        string
 	key         string
 	minZoom     int
@@ -93,21 +92,21 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
 	st, err := os.Stat(path.Join(fpath, fname))
 
 	if err != nil {
-		p.logger.Debugf("miss")
+		p.logger.Debug("miss")
 		return p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 	}
 
 	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
-		p.logger.Debugf("hit")
+		p.logger.Debug("hit")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
 	if rand.Float32() < p.keepProbability {
-		p.logger.Debugf("keep")
+		p.logger.Debug("keep")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
-	p.logger.Debugf("timeout")
+	p.logger.Debug("timeout")
 	data, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 
 	// backup - return file if any
@@ -188,7 +187,7 @@ func (p *Proxy) GetUrl(z, x, y int) string {
 	return p.urlGetter(z, x, y)
 }
 
-func GoogleHybrid(logger *zap.SugaredLogger, path string) *Proxy {
+func GoogleHybrid(logger *slog.Logger, path string) *Proxy {
 	return &Proxy{
 		logger:          logger,
 		minZoom:         2,
@@ -206,7 +205,7 @@ func GoogleHybrid(logger *zap.SugaredLogger, path string) *Proxy {
 	}
 }
 
-func OpenTopoCZ(logger *zap.SugaredLogger, path string) *Proxy {
+func OpenTopoCZ(logger *slog.Logger, path string) *Proxy {
 	return &Proxy{
 		logger:          logger,
 		minZoom:         2,
