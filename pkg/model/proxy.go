@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +27,7 @@ type Proxy struct {
 	serverParts []string
 	timeout     time.Duration
 	httpTimeout time.Duration
+	cl          *http.Client
 
 	urlGetter func(z, x, y int) string
 
@@ -36,6 +36,16 @@ type Proxy struct {
 
 	t1 *Tile
 	t2 *Tile
+}
+
+func (p *Proxy) Init() {
+	p.cl = &http.Client{
+		Timeout: time.Second * 10,
+		Transport: &http.Transport{
+			ResponseHeaderTimeout: p.httpTimeout,
+			MaxConnsPerHost:       4,
+		},
+	}
 }
 
 func (p *Proxy) GetName() string {
@@ -86,27 +96,29 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
 		y = 1<<z - y - 1
 	}
 
+	logger := p.logger.With("zoom", strconv.Itoa(z))
+
 	fpath := path.Join(p.path, fmt.Sprintf("z%d/%d/x%d/%d", z, int(x/1024), x, int(y/1024)))
 	fname := fmt.Sprintf("y%d.%s", y, p.ext)
 
 	st, err := os.Stat(path.Join(fpath, fname))
 
 	if err != nil {
-		p.logger.Debug("miss")
+		logger.Debug("miss")
 		return p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 	}
 
 	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
-		p.logger.Debug("hit")
+		logger.Debug("hit")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
 	if rand.Float32() < p.keepProbability {
-		p.logger.Debug("keep")
+		logger.Debug("keep")
 		return os.ReadFile(path.Join(fpath, fname))
 	}
 
-	p.logger.Debug("timeout")
+	logger.Debug("timeout")
 	data, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
 
 	// backup - return file if any
@@ -122,15 +134,15 @@ func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) (
 		return nil, fmt.Errorf("offline")
 	}
 
-	cl := &http.Client{Timeout: p.httpTimeout}
-
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := cl.Do(req)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0")
+
+	resp, err := p.cl.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -185,40 +197,4 @@ func (p *Proxy) GetUrl(z, x, y int) string {
 	}
 
 	return p.urlGetter(z, x, y)
-}
-
-func GoogleHybrid(logger *slog.Logger, path string) *Proxy {
-	return &Proxy{
-		logger:          logger,
-		minZoom:         2,
-		maxZoom:         19,
-		keepProbability: 0.5,
-		key:             "google_h",
-		name:            "Google hybrid",
-		tms:             false,
-		path:            filepath.Join(path, "tiles", "google_hybrid"),
-		ext:             "jpg",
-		timeout:         time.Hour * 24 * 30,
-		httpTimeout:     time.Second * 5,
-		url:             "http://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&s=Galileo",
-		serverParts:     []string{"0", "1", "2", "3"},
-	}
-}
-
-func OpenTopoCZ(logger *slog.Logger, path string) *Proxy {
-	return &Proxy{
-		logger:          logger,
-		minZoom:         2,
-		maxZoom:         18,
-		keepProbability: 0.7,
-		key:             "opentopo_cz",
-		name:            "Opentopo CZ",
-		tms:             false,
-		path:            filepath.Join(path, "tiles", "opentopo_cz"),
-		url:             "https://tile-{s}.opentopomap.cz/{z}/{x}/{y}.png",
-		ext:             "png",
-		serverParts:     []string{"a", "b", "c"},
-		timeout:         time.Hour * 24 * 7,
-		httpTimeout:     time.Second * 10,
-	}
 }

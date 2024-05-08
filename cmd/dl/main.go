@@ -7,17 +7,22 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kdudkov/tileproxy/pkg/model"
 	_ "modernc.org/sqlite"
 )
 
+const workers = 4
+
 type App struct {
+	logger        *slog.Logger
 	layer         model.Source
 	dbFilename    string
 	tilesFilename string
@@ -25,6 +30,7 @@ type App struct {
 
 func NewApp(l model.Source, dbFilename, tilesFilename string) *App {
 	return &App{
+		logger:        slog.Default(),
 		layer:         l,
 		dbFilename:    dbFilename,
 		tilesFilename: tilesFilename,
@@ -43,11 +49,6 @@ func (app *App) GetType() string {
 }
 
 func (app *App) Run() error {
-	if app.layer == nil {
-		fmt.Println("no layer!")
-		return nil
-	}
-
 	_ = os.Remove(app.dbFilename)
 	db, err := sql.Open("sqlite", app.dbFilename)
 
@@ -75,7 +76,19 @@ func (app *App) Run() error {
 	minzoom, maxzoom := 0, 0
 	total := 0
 
-	ctx := context.Background()
+	ch := make(chan string)
+	fnchan := make(chan func(db *sql.DB))
+
+	wg := new(sync.WaitGroup)
+
+	wg.Add(1)
+	go dbWorker(wg, db, fnchan)
+
+	wg1 := new(sync.WaitGroup)
+	for i := 0; i < workers; i++ {
+		wg1.Add(1)
+		go app.worker(i, wg1, ch, fnchan)
+	}
 
 	for {
 		ln, readerr := r.ReadString('\n')
@@ -92,22 +105,6 @@ func (app *App) Run() error {
 			}
 
 			z, _ := strconv.Atoi(d[0])
-			x, _ := strconv.Atoi(d[1])
-			y, _ := strconv.Atoi(d[2])
-
-			data, err := app.layer.GetTile(ctx, z, x, y)
-
-			if err != nil {
-				return err
-			}
-
-			if data == nil {
-				return fmt.Errorf("no tile z=%d %d/%d", z, x, y)
-			}
-
-			if err := putData(db, z, x, y, data); err != nil {
-				return err
-			}
 
 			total += 1
 
@@ -117,6 +114,8 @@ func (app *App) Run() error {
 
 			minzoom = min(minzoom, z)
 			maxzoom = max(maxzoom, z)
+
+			ch <- ln
 		}
 
 		if errors.Is(readerr, io.EOF) {
@@ -124,12 +123,17 @@ func (app *App) Run() error {
 		}
 	}
 
+	close(ch)
+	wg1.Wait()
+	close(fnchan)
+	wg.Wait()
+
 	meta := map[string]string{
 		"version": "1.1",
 		"format":  app.GetType(),
 		"minzoom": fmt.Sprintf("%d", minzoom),
 		"maxzoom": fmt.Sprintf("%d", maxzoom),
-		"name":    app.tilesFilename,
+		"name":    strings.Trim(app.tilesFilename, "./"),
 		"scheme":  "tms",
 	}
 
@@ -141,6 +145,77 @@ func (app *App) Run() error {
 	fmt.Printf("total tiles: %d\n", total)
 
 	return nil
+}
+
+func LoadSources(logger *slog.Logger, cacheDir string) ([]*model.Proxy, error) {
+	d, err := os.ReadFile("layers.yml")
+
+	if err != nil {
+		return nil, err
+	}
+
+	var res []*model.LayerDescription
+
+	if err := yaml.Unmarshal(d, &res); err != nil {
+		return nil, err
+	}
+
+	layers := make([]*model.Proxy, 0, len(res))
+
+	for _, l := range res {
+		p := model.NewProxy(l, logger, cacheDir)
+		layers = append(layers, p)
+	}
+
+	return layers, nil
+}
+
+func dbWorker(wg *sync.WaitGroup, db *sql.DB, ch chan func(db *sql.DB)) {
+	for fn := range ch {
+		fn(db)
+	}
+
+	wg.Done()
+}
+
+func (app *App) worker(i int, wg *sync.WaitGroup, ch chan string, fnchan chan func(db *sql.DB)) {
+	ctx := context.Background()
+
+	logger := app.logger.With("worker", strconv.Itoa(i))
+
+	for s := range ch {
+		d := strings.Split(strings.Trim(s, "\n\r "), "/")
+
+		if len(d) != 3 {
+			logger.Error("invalid string: " + s)
+			continue
+		}
+
+		z, _ := strconv.Atoi(d[0])
+		x, _ := strconv.Atoi(d[1])
+		y, _ := strconv.Atoi(d[2])
+
+		data, err := app.layer.GetTile(ctx, z, x, y)
+
+		if err != nil {
+			logger.Error("error", "error", err)
+			continue
+		}
+
+		if data == nil {
+			logger.Error("nil data")
+			continue
+		}
+
+		fnchan <- func(db *sql.DB) {
+			if err := putData(db, z, x, y, data); err != nil {
+				logger.Error("save error", "error", err)
+			}
+		}
+	}
+
+	logger.Info("done")
+	wg.Done()
 }
 
 func createTables(db *sql.DB) error {
@@ -175,6 +250,7 @@ func putMeta(db *sql.DB, meta map[string]string) error {
 func main() {
 	var dir = flag.String("path", ".", "mbtiles path")
 	var layer = flag.String("layer", "", "layer")
+	var mapName = flag.String("map_name", "", "")
 
 	flag.Parse()
 
@@ -183,22 +259,38 @@ func main() {
 		return
 	}
 
+	tilesFile := flag.Arg(0)
+	dbFile := *mapName
+
+	if dbFile == "" {
+		dbFile = tilesFile + ".mbtiles"
+	}
+
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(h))
 
-	var proxy model.Source
+	layers, err := LoadSources(slog.Default(), *dir)
 
-	switch *layer {
-	case "google_h", "google":
-		proxy = model.GoogleHybrid(slog.Default(), *dir)
-	case "topo":
-		proxy = model.OpenTopoCZ(slog.Default(), *dir)
-	default:
-		fmt.Println("you need to specify a proxy: google or topo")
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
-	err := NewApp(proxy, flag.Arg(0)+".mbtiles", flag.Arg(0)).Run()
+	var proxy model.Source
+
+	for _, s := range layers {
+		if s.GetKey() == *layer {
+			proxy = s
+			break
+		}
+	}
+
+	if proxy == nil {
+		fmt.Println("you need to specify a valid proxy")
+		return
+	}
+
+	err = NewApp(proxy, dbFile, tilesFile).Run()
 
 	if err != nil {
 		fmt.Printf("error: %s\n", err.Error())

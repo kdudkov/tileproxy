@@ -21,7 +21,7 @@ type LayerDescription struct {
 }
 
 func NewProxy(l *LayerDescription, logger *slog.Logger, path string) *Proxy {
-	return &Proxy{
+	p := &Proxy{
 		logger:          logger,
 		minZoom:         l.MinZoom,
 		maxZoom:         l.MaxZoom,
@@ -36,4 +36,8 @@ func NewProxy(l *LayerDescription, logger *slog.Logger, path string) *Proxy {
 		timeout:         l.Timeout,
 		httpTimeout:     time.Second * 10,
 	}
+
+	p.Init()
+
+	return p
 }
