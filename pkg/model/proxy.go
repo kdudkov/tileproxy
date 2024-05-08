@@ -43,7 +43,7 @@ func (p *Proxy) Init() {
 		Timeout: time.Second * 10,
 		Transport: &http.Transport{
 			ResponseHeaderTimeout: p.httpTimeout,
-			MaxConnsPerHost:       4,
+			//MaxConnsPerHost:       4,
 		},
 	}
 }

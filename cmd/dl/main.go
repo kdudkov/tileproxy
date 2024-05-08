@@ -19,21 +19,23 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const workers = 4
-
 type App struct {
 	logger        *slog.Logger
 	layer         model.Source
 	dbFilename    string
 	tilesFilename string
+	title         string
+	workers       int
 }
 
-func NewApp(l model.Source, dbFilename, tilesFilename string) *App {
+func NewApp(l model.Source, dbFilename, tilesFilename, title string, workers int) *App {
 	return &App{
 		logger:        slog.Default(),
 		layer:         l,
 		dbFilename:    dbFilename,
 		tilesFilename: tilesFilename,
+		title:         title,
+		workers:       workers,
 	}
 }
 
@@ -73,9 +75,6 @@ func (app *App) Run() error {
 
 	r := bufio.NewReader(f)
 
-	minzoom, maxzoom := 0, 0
-	total := 0
-
 	ch := make(chan string)
 	fnchan := make(chan func(db *sql.DB))
 
@@ -85,7 +84,7 @@ func (app *App) Run() error {
 	go dbWorker(wg, db, fnchan)
 
 	wg1 := new(sync.WaitGroup)
-	for i := 0; i < workers; i++ {
+	for i := 0; i < app.workers; i++ {
 		wg1.Add(1)
 		go app.worker(i, wg1, ch, fnchan)
 	}
@@ -98,23 +97,6 @@ func (app *App) Run() error {
 		}
 
 		if ln != "" {
-			d := strings.Split(strings.Trim(ln, "\n\r "), "/")
-
-			if len(d) != 3 {
-				return fmt.Errorf("invalid string: %s", ln)
-			}
-
-			z, _ := strconv.Atoi(d[0])
-
-			total += 1
-
-			if minzoom == 0 {
-				minzoom = z
-			}
-
-			minzoom = min(minzoom, z)
-			maxzoom = max(maxzoom, z)
-
 			ch <- ln
 		}
 
@@ -128,12 +110,18 @@ func (app *App) Run() error {
 	close(fnchan)
 	wg.Wait()
 
+	zmin, zmax, err := getZoom(db)
+
+	if err != nil {
+		return err
+	}
+
 	meta := map[string]string{
 		"version": "1.1",
 		"format":  app.GetType(),
-		"minzoom": fmt.Sprintf("%d", minzoom),
-		"maxzoom": fmt.Sprintf("%d", maxzoom),
-		"name":    strings.Trim(app.tilesFilename, "./"),
+		"minzoom": strconv.Itoa(zmin),
+		"maxzoom": strconv.Itoa(zmax),
+		"name":    app.title,
 		"scheme":  "tms",
 	}
 
@@ -141,8 +129,7 @@ func (app *App) Run() error {
 		return err
 	}
 
-	fmt.Printf("zoom: %d - %d\n", minzoom, maxzoom)
-	fmt.Printf("total tiles: %d\n", total)
+	fmt.Printf("zoom: %d - %d\n", zmin, zmax)
 
 	return nil
 }
@@ -237,6 +224,25 @@ func putData(db *sql.DB, z, x, y int, data []byte) error {
 	return err
 }
 
+func getZoom(db *sql.DB) (int, int, error) {
+	row, err := db.Query("select max(zoom_level) as zmax, min(zoom_level) as zmin FROM tiles")
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	defer row.Close()
+
+	var zmin, zmax int
+
+	if row.Next() {
+		err1 := row.Scan(&zmax, &zmin)
+		return zmin, zmax, err1
+	}
+
+	return 0, 0, nil
+}
+
 func putMeta(db *sql.DB, meta map[string]string) error {
 	for k, v := range meta {
 		_, err := db.Exec("INSERT INTO metadata (name, value) values (?,?)", k, v)
@@ -251,6 +257,8 @@ func main() {
 	var dir = flag.String("path", ".", "mbtiles path")
 	var layer = flag.String("layer", "", "layer")
 	var mapName = flag.String("map_name", "", "")
+	var flagTitle = flag.String("title", "", "")
+	var workers = flag.Int("n", 2, "")
 
 	flag.Parse()
 
@@ -263,7 +271,11 @@ func main() {
 	dbFile := *mapName
 
 	if dbFile == "" {
-		dbFile = tilesFile + ".mbtiles"
+		dbFile = fmt.Sprintf("%s_%s.mbtiles", strings.Trim(tilesFile, "./"), *layer)
+	}
+
+	if !strings.HasSuffix(dbFile, ".mbtiles") {
+		dbFile = dbFile + ".mbtiles"
 	}
 
 	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
@@ -290,7 +302,13 @@ func main() {
 		return
 	}
 
-	err = NewApp(proxy, dbFile, tilesFile).Run()
+	title := *flagTitle
+
+	if title == "" {
+		title = fmt.Sprintf("%s %s", proxy.GetName(), strings.Trim(tilesFile, "./"))
+	}
+
+	err = NewApp(proxy, dbFile, tilesFile, title, *workers).Run()
 
 	if err != nil {
 		fmt.Printf("error: %s\n", err.Error())

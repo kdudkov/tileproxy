@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -79,6 +80,7 @@ func (app *App) addFileSources() error {
 		}
 
 		app.layers = append(app.layers, l)
+		app.logger.Info(fmt.Sprintf("loaded file %s, name %s", f.Name(), l.GetName()))
 	}
 
 	return nil

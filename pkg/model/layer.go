@@ -170,29 +170,21 @@ func (l *Layer) getMinMaxZoom() (int, int, error) {
 	l.mx.Lock()
 	defer l.mx.Unlock()
 
-	row, err := l.db.Query("SELECT zoom_level, min(tile_column), max(tile_column), min(tile_row), max(tile_row) from tiles group by zoom_level order by zoom_level")
+	row, err := l.db.Query("SELECT min(zoom_level), max(tile_column) FROM tiles")
 	if err != nil {
 		return 0, 0, err
 	}
 
-	minv := -1
-	maxv := -1
+	var zmin, zmax int
 
 	defer row.Close()
-	for row.Next() {
-		var minx, maxx, miny, maxy, z int
-		if err = row.Scan(&z, &minx, &maxx, &miny, &maxy); err != nil {
+	if row.Next() {
+		if err = row.Scan(&zmin, &zmax); err != nil {
 			return 0, 0, err
-		}
-		if minv == -1 || z < minv {
-			minv = z
-		}
-		if maxv == -1 || z > maxv {
-			maxv = z
 		}
 	}
 
-	return minv, maxv, nil
+	return zmin, zmax, nil
 }
 
 func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) ([]byte, error) {
