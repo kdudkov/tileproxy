@@ -7,7 +7,7 @@ let app = new Vue({
         ts: 0,
         zoom: 10,
         keys: new Set(),
-        dz: 3,
+        dz: 2,
         filename: "tiles",
     },
 
@@ -64,7 +64,7 @@ let app = new Vue({
                         }
                     });
 
-                    th.grid = new L.GridLayer.GridDebug({tileSize: 256 / 2 ^ th.dz, zIndex: 0});
+                    th.grid = new L.GridLayer.GridDebug({tileSize: 256 / (1 << th.dz), zIndex: 0});
                     th.layers.addOverlay(th.grid, "grid");
                     th.grid.bringToFront();
                 });
@@ -79,14 +79,14 @@ let app = new Vue({
             if (this.keys.has(key)) {
                 tile.style.backgroundColor = 'rgba(255,0,0,0.1)';
             }
-            tile.style.fontSize = '10pt';
+            tile.style.fontSize = '8pt';
             tile.innerHTML = key;
             return tile;
         },
 
         onClick: function (e) {
             // console.log(e);
-            let ts = 256 / 2 ^ this.dz;
+            let ts = 256 / (1 << this.dz);
             let p = this.map.project(e.latlng, this.map.getZoom());
             let key = [this.map.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
             console.log(key);
