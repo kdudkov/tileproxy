@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
 	"log/slog"
 	"os"
@@ -15,8 +14,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kdudkov/tileproxy/pkg/model"
+	"github.com/schollz/progressbar/v3"
+	"gopkg.in/yaml.v3"
+
 	_ "modernc.org/sqlite"
+
+	"github.com/kdudkov/tileproxy/pkg/model"
 )
 
 type App struct {
@@ -80,8 +83,10 @@ func (app *App) Run() error {
 
 	wg := new(sync.WaitGroup)
 
+	bar := progressbar.Default(getTilesNum(app.tilesFilename), "tiles downloaded")
+
 	wg.Add(1)
-	go dbWorker(wg, db, fnchan)
+	go dbWorker(wg, db, fnchan, bar)
 
 	wg1 := new(sync.WaitGroup)
 	for i := 0; i < app.workers; i++ {
@@ -134,6 +139,38 @@ func (app *App) Run() error {
 	return nil
 }
 
+func getTilesNum(name string) int64 {
+	f, err := os.Open(name)
+
+	if err != nil {
+		return -1
+	}
+
+	defer f.Close()
+
+	r := bufio.NewReader(f)
+
+	var res int64
+
+	for {
+		ln, readerr := r.ReadString('\n')
+
+		if readerr != nil && !errors.Is(readerr, io.EOF) {
+			return -1
+		}
+
+		if ln != "" {
+			res++
+		}
+
+		if errors.Is(readerr, io.EOF) {
+			break
+		}
+	}
+
+	return res
+}
+
 func LoadSources(logger *slog.Logger, cacheDir string) ([]*model.Proxy, error) {
 	d, err := os.ReadFile("layers.yml")
 
@@ -157,8 +194,9 @@ func LoadSources(logger *slog.Logger, cacheDir string) ([]*model.Proxy, error) {
 	return layers, nil
 }
 
-func dbWorker(wg *sync.WaitGroup, db *sql.DB, ch chan func(db *sql.DB)) {
+func dbWorker(wg *sync.WaitGroup, db *sql.DB, ch chan func(db *sql.DB), bar *progressbar.ProgressBar) {
 	for fn := range ch {
+		bar.Add(1)
 		fn(db)
 	}
 
@@ -278,7 +316,7 @@ func main() {
 		dbFile = dbFile + ".mbtiles"
 	}
 
-	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	slog.SetDefault(slog.New(h))
 
 	layers, err := LoadSources(slog.Default(), *dir)
