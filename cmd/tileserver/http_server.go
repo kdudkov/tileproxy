@@ -7,10 +7,10 @@ import (
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/redirect"
-
 	"github.com/kdudkov/tileproxy/pkg/model"
 )
 
@@ -22,6 +22,10 @@ func NewHttp(app *App) *fiber.App {
 
 	f.Use(logger.New(logger.Config{
 		Format: "[${ip}]:${port} ${status} - ${locals:username} ${method} ${path} ${queryParams}\n",
+	}))
+
+	f.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
 	}))
 
 	f.Use(redirect.New(redirect.Config{
@@ -45,15 +49,31 @@ func NewHttp(app *App) *fiber.App {
 func getLayersHandler(app *App) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		r := make([]map[string]interface{}, 0)
+
+		app.mx.RLock()
+
 		for _, l := range app.layers {
 			ld := make(map[string]interface{})
 			ld["url"] = "/tiles/" + url.QueryEscape(l.GetKey()) + "/{z}/{x}/{y}"
-			ld["minzoom"] = l.GetMinZoom()
-			ld["maxzoom"] = l.GetMaxZoom()
+			ld["min_zoom"] = l.GetMinZoom()
+			ld["max_zoom"] = l.GetMaxZoom()
 			ld["name"] = l.GetName()
 			ld["file"] = l.IsFile()
 			r = append(r, ld)
 		}
+
+		for _, l := range app.fileLayers {
+			ld := make(map[string]interface{})
+			ld["url"] = "/tiles/" + url.QueryEscape(l.GetKey()) + "/{z}/{x}/{y}"
+			ld["min_zoom"] = l.GetMinZoom()
+			ld["max_zoom"] = l.GetMaxZoom()
+			ld["name"] = l.GetName()
+			ld["file"] = l.IsFile()
+			r = append(r, ld)
+		}
+
+		app.mx.RUnlock()
+
 		return c.JSON(r)
 	}
 }

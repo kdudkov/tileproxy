@@ -43,8 +43,8 @@ let app = new Vue({
                     data.forEach(function (i) {
                         console.log(i);
                         let opts = {
-                            maxZoom: i.maxzoom,
-                            minZoom: i.minzoom
+                            maxZoom: i.max_zoom,
+                            minZoom: i.min_zoom
                         };
 
                         if (i.parts) {
