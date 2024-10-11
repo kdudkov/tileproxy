@@ -35,7 +35,7 @@ build: clean dep
 
 .PHONY: gox
 gox: clean dep
-	GOARM=5 gox --osarch="linux/amd64 linux/arm" -output "dist/{{.OS}}_{{.Arch}}/{{.Dir}}" $(LDFLAGS) ./cmd/...
+	gox --osarch="linux/amd64 darwin/amd64 darwin/arm64" -output "dist/{{.OS}}_{{.Arch}}/{{.Dir}}" $(LDFLAGS) ./cmd/...
 
 .PHONY: run
 run: dep

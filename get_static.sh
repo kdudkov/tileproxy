@@ -3,8 +3,8 @@
 d="./cmd/tileserver/static"
 
 # bootstrap
-curl https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css -o $d/css/bootstrap.min.css
-curl https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js -o $d/js/bootstrap.bundle.min.js
+curl https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css -o $d/css/bootstrap.min.css
+curl https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js -o $d/js/bootstrap.bundle.min.js
 
 # icons
 #curl -L https://github.com/twbs/icons/releases/download/v1.11.3/bootstrap-icons-1.11.3.zip -o icons.zip
