@@ -1,31 +1,31 @@
-let app = new Vue({
-    el: '#app',
-    data: {
-        map: null,
-        layers: null,
-        grid: null,
-        ts: 0,
-        zoom: 10,
-        keys: new Set(),
-        dz: 2,
-        filename: "tiles",
+var map = null;
+var grid = null;
+
+const app = Vue.createApp({
+    data: function () {
+        return {
+            layers: null,
+            ts: 0,
+            zoom: 10,
+            keys: new Set(),
+            dz: 2,
+            filename: "tiles",
+        }
     },
 
     mounted() {
-        this.map = L.map('map');
+        map = L.map('map');
 
-        L.control.scale({metric: true}).addTo(this.map);
+        L.control.scale({metric: true}).addTo(map);
 
-        this.map.setView([60, 30.8], this.zoom);
+        map.setView([60, 30.8], this.zoom);
 
-        L.GridLayer.GridDebug = L.GridLayer.extend({
-            createTile: this.draw_tile,
-        });
-
+        grid = new L.GridLayer({tileSize: 256 / (1 << this.dz), zIndex: 0});
+        grid.createTile = this.draw_tile;
 
         this.get_layers();
-        this.map.on('click', this.onClick);
-        this.map.on('zoom', this.onZoom)
+        map.on('click', this.onClick);
+        map.on('zoom', this.onZoom)
     },
 
     methods: {
@@ -37,7 +37,7 @@ let app = new Vue({
                 })
                 .then(function (data) {
                     th.layers = L.control.layers({}, null, {hideSingleBase: true});
-                    th.layers.addTo(th.map);
+                    th.layers.addTo(map);
 
                     let first = true;
                     data.forEach(function (i) {
@@ -59,14 +59,13 @@ let app = new Vue({
                             th.layers.addBaseLayer(l, i.name);
                             if (first) {
                                 first = false;
-                                l.addTo(th.map);
+                                l.addTo(map);
                             }
                         }
                     });
 
-                    th.grid = new L.GridLayer.GridDebug({tileSize: 256 / (1 << th.dz), zIndex: 0});
-                    th.layers.addOverlay(th.grid, "grid");
-                    th.grid.bringToFront();
+                    th.layers.addOverlay(grid, "grid");
+                    grid.bringToFront();
                 });
         },
 
@@ -79,17 +78,17 @@ let app = new Vue({
             if (this.keys.has(key)) {
                 tile.style.backgroundColor = 'rgba(255,0,0,0.1)';
             }
-            tile.style.fontSize = '8pt';
-            tile.innerHTML = key;
+            tile.style.fontSize = '6pt';
+            // tile.innerHTML = key;
             return tile;
         },
 
         onClick: function (e) {
-            // console.log(e);
+            let m = e.sourceTarget;
             let ts = 256 / (1 << this.dz);
-            let p = this.map.project(e.latlng, this.map.getZoom());
-            let key = [this.map.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
-            console.log(key);
+            let p = m.project(e.latlng, m.getZoom());
+            let key = [m.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
+            // console.log(key);
 
             if (this.keys.has(key)) {
                 this.keys.delete(key);
@@ -97,15 +96,16 @@ let app = new Vue({
                 this.keys.add(key);
             }
             this.ts = this.keys.size;
-            this.grid.redraw();
+
+            grid.redraw();
         },
 
         onZoom: function (e) {
-            this.zoom = this.map.getZoom();
+            this.zoom = e.target.getZoom();
         },
 
         copy_up: function () {
-            let z = this.map.getZoom() + this.dz - 1;
+            let z = map.getZoom() + this.dz - 1;
             for (let k of this.keys) {
                 if (k.startsWith(z + "/")) {
                     let n = k.split('/');
@@ -116,7 +116,7 @@ let app = new Vue({
                 }
             }
             this.ts = this.keys.size;
-            this.grid.redraw();
+            grid.redraw();
         },
 
         print: function () {
@@ -124,23 +124,25 @@ let app = new Vue({
             window.open('data:text/csv;charset=utf-8,' + encodeURI(Array.from(this.keys).join("\n")));
         },
         redraw_all: function () {
-            this.map.eachLayer(function (layer) {
+            map.eachLayer(function (layer) {
                 layer.redraw();
             });
         },
         clear: function () {
             this.keys.clear();
-            this.grid.redraw();
+            grid.redraw();
         },
         clear_zoom: function () {
-            let z = this.map.getZoom()
+            let z = map.getZoom()
             for (let k of this.keys) {
                 if (k.startsWith(z + "/")) {
                     this.keys.delete(key);
                 }
             }
             this.ts = this.keys.size;
-            this.grid.redraw();
+            grid.redraw();
         }
     }
 });
+
+app.mount('#app');

@@ -9,26 +9,27 @@
 
     <link rel="stylesheet" href="/static/css/bootstrap.min.css"/>
     <link rel="stylesheet" href="/static/css/leaflet.css"/>
+    <style>
+        .leaflet-control-attribution {
+            visibility: hidden;
+        }
+    </style>
 </head>
 
 <body>
-<div id="app">
-    <div class="container-fluid vh-100">
-        <div class="row">
-            <div class="col my-1">
-                <span class="badge bg-success">zoom: {{ zoom }}</span>
-                <span class="badge bg-success">tile zoom: {{ zoom + dz }}</span>
-                <span class="badge bg-success">tiles: {{ ts }}</span>
-                <button type="button" class="btn btn-secondary" v-on:click="copy_up();">From upper</button>
-                <button type="button" class="btn btn-secondary" v-on:click="print();">Print</button>
-                <button type="button" class="btn btn-secondary" v-on:click="clear();">Clear</button>
-                <button type="button" class="btn btn-secondary" v-on:click="clear_zoom();">Clear zoom</button>
-                <button type="button" class="btn btn-secondary" v-on:click="redraw_all();">Redraw</button>
-            </div>
-        </div>
-        <div class="row h-100">
-            <div id="map" class="col h-100"></div>
-        </div>
+<div id="app" class="vh-100 d-flex flex-column">
+    <div>
+        <span class="badge bg-success mx-2">zoom: {{ zoom }}</span>
+        <span class="badge bg-success mx-2">tile zoom: {{ zoom + dz }}</span>
+        <span class="badge bg-success mx-2">tiles: {{ ts }}</span>
+        <button class="btn btn-secondary m-1" @click="copy_up">From upper</button>
+        <button class="btn btn-secondary m-1" @click="print">Print</button>
+        <button class="btn btn-secondary m-1" @click="clear">Clear</button>
+        <button class="btn btn-secondary m-1" @click="clear_zoom">Clear zoom</button>
+        <button class="btn btn-secondary m-1" @click="redraw_all">Redraw</button>
+    </div>
+    <div class="flex-grow-1">
+        <div id="map" class="h-100"></div>
     </div>
 </div>
 </body>
