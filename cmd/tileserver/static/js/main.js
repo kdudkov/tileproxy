@@ -32,10 +32,8 @@ const app = Vue.createApp({
         get_layers: function () {
             let th = this;
             fetch('/layers')
-                .then(function (response) {
-                    return response.json()
-                })
-                .then(function (data) {
+                .then(resp => resp.json())
+                .then(data => {
                     th.layers = L.control.layers({}, null, {hideSingleBase: true});
                     th.layers.addTo(map);
 
@@ -84,10 +82,9 @@ const app = Vue.createApp({
         },
 
         onClick: function (e) {
-            let m = e.sourceTarget;
             let ts = 256 / (1 << this.dz);
-            let p = m.project(e.latlng, m.getZoom());
-            let key = [m.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
+            let p = map.project(e.latlng, map.getZoom());
+            let key = [map.getZoom() + this.dz, Math.floor(p.x / ts), Math.floor(p.y / ts)].join('/');
             // console.log(key);
 
             if (this.keys.has(key)) {

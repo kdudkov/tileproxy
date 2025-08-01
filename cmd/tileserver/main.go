@@ -178,7 +178,7 @@ func (app *App) loop() {
 func main() {
 	var filesDir = flag.String("files", ".", "mbtiles path")
 	var cacheDir = flag.String("cache", ".", "cache path")
-	var addr = flag.String("addr", "localhost:8080", "listen address")
+	var addr = flag.String("addr", ":8888", "listen address")
 	var debug = flag.Bool("debug", false, "")
 
 	flag.Parse()
