@@ -3,11 +3,11 @@
   name: Google hybrid
   minZoom: 2
   maxZoom: 19
+  timeout: 720h
   keepProbability: 0.8
   tileType: jpg
   url: "http://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&s=Galileo"
   serverParts: [ "0", "1", "2", "3" ]
-  timeout: 720h
 - key: opentopo_cz
   name: Opentopo CZ
   minZoom: 2
@@ -21,16 +21,16 @@
   name: Opentopo
   minZoom: 2
   maxZoom: 17
+  timeout: 168h
   keepProbability: 0.5
   url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
   tileType: png
   serverParts: [ "a", "b", "c" ]
-  timeout: 168h
 - key: yandex_map
   name: Yandex map
   minZoom: 2
   maxZoom: 20
+  timeout: 720h
   keepProbability: 0.8
   tileType: png
   url: "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&projection=web_mercator&lang=ru_RU"
-  timeout: 720h
