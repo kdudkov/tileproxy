@@ -1,6 +1,14 @@
 [[$port:=.port]]
-[[ range .layers ]]
-[[.name]]: http://localhost:[[$port]][[.url]]<br/>
-[[ end ]]
+[[$layers:=.layers]]
 
+[[ range .ips ]]
+<h4>Local ip [[.]]</h4>
+<ul>
+    [[$ip:=.]]
+    [[ range $layers ]]
+    <li>[[.name]]:<br/><span class="font-monospace">http://[[- $ip -]]:[[- $port -]][[- .url -]]</span></li>
+[[ end ]]
+</ul>
+
+[[ end ]]
 <a href="/map">Map</a>
