@@ -104,6 +104,12 @@ func (app *App) addFileSources() error {
 }
 
 func (app *App) Run() {
+	if err := os.MkdirAll(app.cacheDir, 0777); err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(app.filesDir, 0777); err != nil {
+		panic(err)
+	}
 	if err := app.addDefaultSources(); err != nil {
 		panic(err)
 	}
@@ -193,8 +199,8 @@ func getLocalAddr() []string {
 }
 
 func main() {
-	var filesDir = flag.String("files", ".", "mbtiles path")
-	var cacheDir = flag.String("cache", ".", "cache path")
+	var filesDir = flag.String("files", "./data", "mbtiles path")
+	var cacheDir = flag.String("cache", "./data", "cache path")
 	var addr = flag.String("addr", ":8888", "listen address")
 	var debug = flag.Bool("debug", false, "")
 
