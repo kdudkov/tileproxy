@@ -220,7 +220,7 @@ func (app *App) worker(i int, wg *sync.WaitGroup, ch chan string, fnchan chan fu
 		x, _ := strconv.Atoi(d[1])
 		y, _ := strconv.Atoi(d[2])
 
-		data, err := app.layer.GetTile(ctx, z, x, y)
+		_, data, err := app.layer.GetTile(ctx, z, x, y)
 
 		if err != nil {
 			logger.Error("error", "error", err)
