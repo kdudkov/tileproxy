@@ -19,20 +19,20 @@ type Source interface {
 	GetName() string
 	IsTms() bool
 	IsFile() bool
+	GetContentType() string
 }
 
 var _ Source = &Layer{}
 
 type Layer struct {
-	minZoom     int
-	maxZoom     int
-	key         string
-	name        string
-	contentType string
-	db          *sql.DB
-	tms         bool
-	meta        map[string]string
-	modTime     time.Time
+	minZoom int
+	maxZoom int
+	key     string
+	name    string
+	db      *sql.DB
+	tms     bool
+	meta    map[string]string
+	modTime time.Time
 }
 
 func NewLayer(key, path string) (*Layer, error) {
@@ -56,7 +56,7 @@ func NewLayer(key, path string) (*Layer, error) {
 		modTime: fileInfo.ModTime(),
 	}
 
-	if  err := l.getMetadata(); err != nil {
+	if err := l.getMetadata(); err != nil {
 		return nil, err
 	}
 
@@ -87,23 +87,26 @@ func NewLayer(key, path string) (*Layer, error) {
 		l.name = v
 	}
 
-	l.contentType = "image/png"
+	return l, nil
+}
 
+func (l *Layer) GetContentType() string {
 	if v, ok := l.meta["format"]; ok {
 		switch v {
 		case "png":
-			l.contentType = "image/png"
+			return "image/png"
 		case "jpg", "jpeg":
-			l.contentType = "image/jpeg"
+			return "image/jpeg"
 		case "webp":
-			l.contentType = "image/webp"
+			return "image/webp"
 		default:
-			return nil, fmt.Errorf("invalid format - %s", v)
+			return "image/png"
 		}
 	}
-
-	return l, nil
+	
+	return "image/png"
 }
+
 
 func (l *Layer) String() string {
 	return fmt.Sprintf("%s %d:%d %v %v %+v", l.name, l.minZoom, l.maxZoom, l.tms, l.modTime, l.meta)
@@ -144,7 +147,7 @@ func (l *Layer) getMetadata() error {
 	}
 
 	l.meta = make(map[string]string)
-	
+
 	defer row.Close()
 	for row.Next() { // Iterate and fetch the records from result cursor
 		var name string
@@ -194,7 +197,7 @@ func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) (string, []byte, er
 			return "", nil, err
 		}
 
-		return l.contentType, data, nil
+		return l.GetContentType(), data, nil
 	}
 
 	return "", nil, nil

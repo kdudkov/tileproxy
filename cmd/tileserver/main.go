@@ -130,6 +130,7 @@ func (app *App) addMultiFiles(name, dpath string) error {
 	})
 	
 	app.layers.Add(model.NewMultilayer(name, name, layers))
+	app.logger.Info(fmt.Sprintf("loaded multilayer %s, %d files", name, len(layers)))
 	
 	return nil
 }
@@ -184,7 +185,7 @@ func (app *App) watch(watcher *fsnotify.Watcher) {
 			if !ok {
 				return
 			}
-			app.logger.Info(fmt.Sprintf("event: %s", event))
+			app.logger.Info(fmt.Sprintf("event: %s, reload files", event))
 			if event.Has(fsnotify.Write) {
 				app.logger.Info("modified file: " + event.Name)
 			}

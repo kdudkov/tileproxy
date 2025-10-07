@@ -48,6 +48,8 @@ func (app *App) GetType() string {
 		return "png"
 	case "image/jpeg":
 		return "jpg"
+	case "image/webp":
+		return "webp"
 	default:
 		return "png"
 	}

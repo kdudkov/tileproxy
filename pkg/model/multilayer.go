@@ -18,9 +18,9 @@ func NewMultilayer(key, name string, layers []*Layer) *MultiLayer {
 		name:   name,
 		layers: layers,
 	}
-	
+
 	m.init()
-	
+
 	return m
 }
 
@@ -28,10 +28,10 @@ func (m *MultiLayer) init() {
 	if len(m.layers) == 0 {
 		panic("no layers")
 	}
-	
+
 	m.minZoom = m.layers[0].GetMinZoom()
 	m.maxZoom = m.layers[0].GetMaxZoom()
-	
+
 	for _, l := range m.layers {
 		m.minZoom = min(m.minZoom, l.GetMinZoom())
 		m.maxZoom = max(m.maxZoom, l.GetMaxZoom())
@@ -60,6 +60,10 @@ func (m *MultiLayer) IsFile() bool {
 
 func (m *MultiLayer) IsTms() bool {
 	return false
+}
+
+func (m *MultiLayer) GetContentType() string {
+	return ""
 }
 
 func (m *MultiLayer) GetTile(ctx context.Context, z int, x int, y int) (string, []byte, error) {
