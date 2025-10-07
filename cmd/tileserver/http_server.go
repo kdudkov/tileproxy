@@ -63,8 +63,6 @@ func NewHttp(app *App) *fiber.App {
 }
 
 func getIndexHandler(app *App) func(c *fiber.Ctx) error {
-	addrs := getLocalAddr()
-
 	return func(c *fiber.Ctx) error {
 		_, port, err := net.SplitHostPort(app.addr)
 
@@ -73,9 +71,9 @@ func getIndexHandler(app *App) func(c *fiber.Ctx) error {
 		}
 
 		d := fiber.Map{
-			"port":   port,
-			"ips":    addrs,
-			"layers": app.getLayers(),
+			"version": getVersion(),
+			"port":    port,
+			"layers":  app.getLayers(),
 		}
 
 		return c.Render("template/index", d, "template/_header")
