@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+var _ Source = &Proxy{}
+
 type Proxy struct {
 	logger      *slog.Logger
 	name        string

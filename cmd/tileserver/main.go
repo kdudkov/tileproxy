@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
@@ -23,25 +22,18 @@ type App struct {
 	filesDir   string
 	cacheDir   string
 	logger     *slog.Logger
-	mx         sync.RWMutex
-	layers     []model.Source
-	fileLayers []model.Source
+	layers     *Layers
 }
 
 func NewApp(addr string) *App {
 	return &App{
-		layers:     nil,
-		fileLayers: nil,
+		layers:     NewLayers(),
 		logger:     slog.Default(),
 		addr:       addr,
-		mx:         sync.RWMutex{},
 	}
 }
 
 func (app *App) addDefaultSources() error {
-	app.mx.Lock()
-	defer app.mx.Unlock()
-
 	d, err := os.ReadFile("layers.yml")
 
 	if err != nil {
@@ -54,27 +46,22 @@ func (app *App) addDefaultSources() error {
 		return err
 	}
 
-	app.layers = make([]model.Source, 0, len(res))
-
 	for _, l := range res {
 		p := model.NewProxy(l, app.logger, app.cacheDir)
-		app.layers = append(app.layers, p)
+		app.layers.Add(p)
 	}
 
 	return nil
 }
 
 func (app *App) addFileSources() error {
-	app.mx.Lock()
-	defer app.mx.Unlock()
-
 	files, err := os.ReadDir(app.filesDir)
 	if err != nil {
 		return err
 	}
 
-	app.fileLayers = make([]model.Source, 0)
-
+	app.layers.RemoveFiles()
+	
 	for _, f := range files {
 		p := path.Join(app.filesDir, f.Name())
 		if f.IsDir() {
@@ -96,7 +83,7 @@ func (app *App) addFileSources() error {
 			continue
 		}
 
-		app.fileLayers = append(app.fileLayers, l)
+		app.layers.Add(l)
 		app.logger.Info(fmt.Sprintf("loaded file %s, name %s", f.Name(), l.GetName()))
 	}
 

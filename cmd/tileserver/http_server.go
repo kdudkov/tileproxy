@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -90,28 +92,21 @@ func getLayersHandler(app *App) func(c *fiber.Ctx) error {
 func (app *App) getLayers() []map[string]any {
 	r := make([]map[string]any, 0)
 
-	app.mx.RLock()
-	defer app.mx.RUnlock()
-
-	for _, l := range app.layers {
+	app.layers.All(func(c model.Source) bool {
 		ld := make(map[string]any)
-		ld["url"] = "/tiles/" + url.QueryEscape(l.GetKey()) + "/{z}/{x}/{y}"
-		ld["min_zoom"] = l.GetMinZoom()
-		ld["max_zoom"] = l.GetMaxZoom()
-		ld["name"] = l.GetName()
-		ld["file"] = l.IsFile()
+		ld["url"] = "/tiles/" + url.QueryEscape(c.GetKey()) + "/{z}/{x}/{y}"
+		ld["min_zoom"] = c.GetMinZoom()
+		ld["max_zoom"] = c.GetMaxZoom()
+		ld["name"] = c.GetName()
+		ld["file"] = c.IsFile()
 		r = append(r, ld)
-	}
 
-	for _, l := range app.fileLayers {
-		ld := make(map[string]any)
-		ld["url"] = "/tiles/" + url.QueryEscape(l.GetKey()) + "/{z}/{x}/{y}"
-		ld["min_zoom"] = l.GetMinZoom()
-		ld["max_zoom"] = l.GetMaxZoom()
-		ld["name"] = l.GetName()
-		ld["file"] = l.IsFile()
-		r = append(r, ld)
-	}
+		return true
+	})
+
+	slices.SortFunc(r, func(a, b map[string]any) int {
+		return strings.Compare(fmt.Sprintf("%v", a["name"]), fmt.Sprintf("%v", b["name"]))
+	})
 
 	return r
 }
@@ -135,14 +130,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 			return fmt.Errorf("error: invalid y value")
 		}
 
-		var layer model.Source
-
-		for _, l := range app.layers {
-			if l.GetKey() == name {
-				layer = l
-				break
-			}
-		}
+		layer, _ := app.layers.Get(name)
 
 		if layer == nil {
 			return c.Status(fiber.StatusNotFound).SendString(fmt.Sprintf("layer %s is not found", name))

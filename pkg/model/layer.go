@@ -27,6 +27,8 @@ type Tile struct {
 	Z int
 }
 
+var _ Source = &Layer{}
+
 type Layer struct {
 	minZoom     int
 	maxZoom     int
