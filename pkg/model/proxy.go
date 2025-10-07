@@ -85,13 +85,13 @@ func (p *Proxy) IsFile() bool {
 	return false
 }
 
-func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
+func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error) {
 	if z < p.minZoom || z > p.maxZoom {
-		return nil, fmt.Errorf("invalid zoom")
+		return "", nil, fmt.Errorf("invalid zoom")
 	}
 
 	if p.t1 != nil && p.t2 != nil && !(&Tile{X: x, Y: y, Z: z}).InRect(p.t1, p.t2) {
-		return nil, fmt.Errorf("border")
+		return "", nil, fmt.Errorf("border")
 	}
 
 	if p.tms {
@@ -107,17 +107,23 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
 
 	if err != nil {
 		logger.Debug("miss")
-		return p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+		b, err :=  p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+		
+		return p.GetContentType(), b, err
 	}
 
 	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
 		logger.Debug("hit")
-		return os.ReadFile(path.Join(fpath, fname))
+		b, err :=   os.ReadFile(path.Join(fpath, fname))
+		
+		return p.GetContentType(), b, err
 	}
 
 	if rand.Float32() < p.keepProbability {
 		logger.Debug("keep")
-		return os.ReadFile(path.Join(fpath, fname))
+		b, err :=   os.ReadFile(path.Join(fpath, fname))
+		
+		return p.GetContentType(), b, err
 	}
 
 	logger.Debug("timeout")
@@ -125,10 +131,12 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) ([]byte, error) {
 
 	// backup - return file if any
 	if err != nil {
-		return os.ReadFile(path.Join(fpath, fname))
+		b, err :=   os.ReadFile(path.Join(fpath, fname))
+		
+		return p.GetContentType(), b, err
 	}
 
-	return data, nil
+	return p.GetContentType(), data, nil
 }
 
 func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) ([]byte, error) {

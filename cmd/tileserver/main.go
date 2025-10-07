@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -64,8 +65,9 @@ func (app *App) addFileSources() error {
 	
 	for _, f := range files {
 		p := path.Join(app.filesDir, f.Name())
+		
 		if f.IsDir() {
-			continue
+			app.addMultiFiles(f.Name(), p)
 		}
 
 		if !strings.HasSuffix(f.Name(), ".mbtiles") && !strings.HasSuffix(f.Name(), ".sqlite") {
@@ -84,9 +86,51 @@ func (app *App) addFileSources() error {
 		}
 
 		app.layers.Add(l)
-		app.logger.Info(fmt.Sprintf("loaded file %s, name %s", f.Name(), l.GetName()))
+		app.logger.Info(fmt.Sprintf("loaded file %s, %s", f.Name(), l.String()))
 	}
 
+	return nil
+}
+
+func (app *App) addMultiFiles(name, dpath string) error {
+	files, err := os.ReadDir(dpath)
+	if err != nil {
+		return err
+	}
+	
+	layers := make([]*model.Layer, 0)
+	
+	for _, f := range files {
+		p := path.Join(dpath, f.Name())
+		
+		if f.IsDir() {
+			continue
+		}
+
+		if !strings.HasSuffix(f.Name(), ".mbtiles") && !strings.HasSuffix(f.Name(), ".sqlite") {
+			continue
+		}
+		
+		l, err := model.NewLayer(f.Name(), p)
+		
+		if err != nil {
+			app.logger.Error("db open error", "error", err)
+			continue
+		}
+		
+		layers = append(layers, l)
+	}
+	
+	if len(layers) == 0 {
+		return nil
+	}
+	
+	slices.SortFunc(layers, func(l1, l2 *model.Layer) int {
+		return l1.GetModTime().Compare(l2.GetModTime())
+	})
+	
+	app.layers.Add(model.NewMultilayer(name, name, layers))
+	
 	return nil
 }
 

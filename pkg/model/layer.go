@@ -4,27 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
-	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
 
 type Source interface {
-	GetTile(ctx context.Context, z, x, y int) ([]byte, error)
+	GetTile(ctx context.Context, z, x, y int) (string, []byte, error)
 	GetMinZoom() int
 	GetMaxZoom() int
 	GetKey() string
 	GetName() string
-	GetContentType() string
 	IsTms() bool
 	IsFile() bool
-}
-
-type Tile struct {
-	X int
-	Y int
-	Z int
 }
 
 var _ Source = &Layer{}
@@ -37,10 +31,17 @@ type Layer struct {
 	contentType string
 	db          *sql.DB
 	tms         bool
-	mx          sync.Mutex
+	meta        map[string]string
+	modTime     time.Time
 }
 
 func NewLayer(key, path string) (*Layer, error) {
+	fileInfo, err := os.Stat(path)
+
+	if err != nil {
+		return nil, err
+	}
+
 	db, err := sql.Open("sqlite", path)
 
 	if err != nil {
@@ -48,14 +49,14 @@ func NewLayer(key, path string) (*Layer, error) {
 	}
 
 	l := &Layer{
-		db:   db,
-		key:  key,
-		name: key,
-		tms:  true,
+		db:      db,
+		key:     key,
+		name:    key,
+		tms:     true,
+		modTime: fileInfo.ModTime(),
 	}
 
-	meta, err := l.getMetadata()
-	if err != nil {
+	if  err := l.getMetadata(); err != nil {
 		return nil, err
 	}
 
@@ -64,57 +65,48 @@ func NewLayer(key, path string) (*Layer, error) {
 		return nil, err
 	}
 
-	if v, ok := meta["minzoom"]; ok {
+	if v, ok := l.meta["minzoom"]; ok {
 		if vv, err := strconv.Atoi(v); err == nil {
 			l.minZoom = vv
 		}
 	}
 
-	if v, ok := meta["maxzoom"]; ok {
+	if v, ok := l.meta["maxzoom"]; ok {
 		if vv, err := strconv.Atoi(v); err == nil {
 			l.maxZoom = vv
 		}
 	}
 
-	if v, ok := meta["scheme"]; ok {
+	if v, ok := l.meta["scheme"]; ok {
 		if v != "tms" {
 			l.tms = false
 		}
 	}
 
-	if v, ok := meta["name"]; ok {
+	if v, ok := l.meta["name"]; ok {
 		l.name = v
 	}
 
 	l.contentType = "image/png"
 
-	if v, ok := meta["format"]; ok {
+	if v, ok := l.meta["format"]; ok {
 		switch v {
 		case "png":
 			l.contentType = "image/png"
 		case "jpg", "jpeg":
 			l.contentType = "image/jpeg"
+		case "webp":
+			l.contentType = "image/webp"
+		default:
+			return nil, fmt.Errorf("invalid format - %s", v)
 		}
 	}
 
 	return l, nil
 }
 
-func (t *Tile) InRect(t1, t2 *Tile) bool {
-	x1 := t.X * (1 << (19 - t.Z))
-	y1 := t.Y * (1 << (19 - t.Z))
-
-	xmin := t1.X * (1 << (19 - t1.Z))
-	xmax := (t2.X + 1) * (1 << (19 - t2.Z))
-
-	ymin := t1.Y * (1 << (19 - t1.Z))
-	ymax := (t2.Y + 1) * (1 << (19 - t2.Z))
-
-	return x1 >= xmin && x1 < xmax && y1 >= ymin && y1 < ymax
-}
-
 func (l *Layer) String() string {
-	return fmt.Sprintf("%s %d:%d %v", l.name, l.minZoom, l.maxZoom, l.tms)
+	return fmt.Sprintf("%s %d:%d %v %v %+v", l.name, l.minZoom, l.maxZoom, l.tms, l.modTime, l.meta)
 }
 
 func (l *Layer) GetKey() string {
@@ -133,10 +125,6 @@ func (l *Layer) GetMaxZoom() int {
 	return l.maxZoom
 }
 
-func (l *Layer) GetContentType() string {
-	return l.contentType
-}
-
 func (l *Layer) IsTms() bool {
 	return l.tms
 }
@@ -145,34 +133,33 @@ func (l *Layer) IsFile() bool {
 	return true
 }
 
-func (l *Layer) getMetadata() (map[string]string, error) {
-	l.mx.Lock()
-	defer l.mx.Unlock()
+func (l *Layer) GetModTime() time.Time {
+	return l.modTime
+}
 
+func (l *Layer) getMetadata() error {
 	row, err := l.db.Query("SELECT name,value FROM metadata ORDER BY name")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	res := make(map[string]string)
+	l.meta = make(map[string]string)
+	
 	defer row.Close()
 	for row.Next() { // Iterate and fetch the records from result cursor
 		var name string
 		var value string
 		if err = row.Scan(&name, &value); err != nil {
-			return nil, err
+			return err
 		}
-		res[name] = value
+		l.meta[name] = value
 	}
 
-	return res, nil
+	return nil
 }
 
 func (l *Layer) getMinMaxZoom() (int, int, error) {
-	l.mx.Lock()
-	defer l.mx.Unlock()
-
-	row, err := l.db.Query("SELECT min(zoom_level), max(tile_column) FROM tiles")
+	row, err := l.db.Query("SELECT min(zoom_level), max(zoom_level) FROM tiles")
 	if err != nil {
 		return 0, 0, err
 	}
@@ -189,14 +176,14 @@ func (l *Layer) getMinMaxZoom() (int, int, error) {
 	return zmin, zmax, nil
 }
 
-func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) ([]byte, error) {
+func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) (string, []byte, error) {
 	if l.tms {
 		y = 1<<zoom - y - 1
 	}
 
 	row, err := l.db.Query("SELECT tile_data FROM tiles WHERE zoom_level=? and tile_column=? and tile_row=?", zoom, x, y)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	defer row.Close()
@@ -204,11 +191,11 @@ func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) ([]byte, error) {
 	if row.Next() {
 		var data []byte
 		if err = row.Scan(&data); err != nil {
-			return nil, err
+			return "", nil, err
 		}
 
-		return data, nil
+		return l.contentType, data, nil
 	}
 
-	return nil, nil
+	return "", nil, nil
 }

@@ -136,7 +136,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusNotFound).SendString(fmt.Sprintf("layer %s is not found", name))
 		}
 
-		data, err := layer.GetTile(c.Context(), zoom, x, y)
+		ct, data, err := layer.GetTile(c.Context(), zoom, x, y)
 
 		if err != nil {
 			app.logger.Error("error getting tile", "error", err)
@@ -144,7 +144,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 		}
 
 		if data != nil {
-			c.Set("Content-Type", layer.GetContentType())
+			c.Set("Content-Type", ct)
 			_, err := c.Write(data)
 			if err != nil {
 				app.logger.Error("error writing response", "error", err)
