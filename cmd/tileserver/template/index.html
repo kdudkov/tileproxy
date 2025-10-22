@@ -1,12 +1,10 @@
 <h2>TileProxy v.[[.version]]</h2>
-[[$port:=.port]]
-[[$layers:=.layers]]
 
 <h4>Layers</h4>
 <ul>
-    [[ range $layers ]]
-    <li>[[.name]]:<br/><span class="font-monospace">http://&lt;external_ip&gt;:[[- $port -]][[- .url -]]</span></li>
-[[ end ]]
+    [[ range .layers -]]
+    <li>[[.name]]:<br/><span class="font-monospace">[[- .url -]]</span></li>
+    [[- end ]]
 </ul>
 
 <a href="/map">Map</a>

@@ -126,7 +126,7 @@ func (app *App) addMultiFiles(name, dpath string) error {
 	}
 	
 	slices.SortFunc(layers, func(l1, l2 *model.Layer) int {
-		return l1.GetModTime().Compare(l2.GetModTime())
+		return strings.Compare(l1.GetName(), l2.GetName())
 	})
 	
 	app.layers.Add(model.NewMultilayer(name, name, layers))

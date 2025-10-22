@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -45,7 +44,7 @@ func NewHttp(app *App) *fiber.App {
 
 	f.Use(redirect.New(redirect.Config{
 		Rules: map[string]string{
-			"/map": "/static/index.html",
+			"/map": "/static/map.html",
 		},
 		StatusCode: 302,
 	}))
@@ -64,35 +63,27 @@ func NewHttp(app *App) *fiber.App {
 
 func getIndexHandler(app *App) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
-		_, port, err := net.SplitHostPort(app.addr)
-
-		if err != nil {
-			return err
-		}
-
 		d := fiber.Map{
 			"version": getVersion(),
-			"port":    port,
-			"layers":  app.getLayers(),
+			"layers":  app.getLayers(c.BaseURL()),
 		}
 
 		return c.Render("template/index", d, "template/_header")
-
 	}
 }
 
 func getLayersHandler(app *App) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
-		return c.JSON(app.getLayers())
+		return c.JSON(app.getLayers(c.BaseURL()))
 	}
 }
 
-func (app *App) getLayers() []map[string]any {
+func (app *App) getLayers(base string) []map[string]any {
 	r := make([]map[string]any, 0)
 
 	app.layers.All(func(c model.Source) bool {
 		ld := make(map[string]any)
-		ld["url"] = "/tiles/" + url.QueryEscape(c.GetKey()) + "/{z}/{x}/{y}"
+		ld["url"] = base + "/tiles/" + url.QueryEscape(c.GetKey()) + "/{z}/{x}/{y}"
 		ld["min_zoom"] = c.GetMinZoom()
 		ld["max_zoom"] = c.GetMaxZoom()
 		ld["name"] = c.GetName()
