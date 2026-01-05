@@ -25,7 +25,7 @@ const app = Vue.createApp({
 
         this.get_layers();
         map.on('click', this.onClick);
-        map.on('zoom', this.onZoom)
+        map.on('zoomend', this.onZoom);
     },
 
     methods: {
@@ -34,20 +34,21 @@ const app = Vue.createApp({
             fetch('/layers')
                 .then(resp => resp.json())
                 .then(data => {
-                    th.layers = L.control.layers({}, null, {hideSingleBase: true});
+                    th.layers = L.control.layers({}, {}, {hideSingleBase: true});
                     th.layers.addTo(map);
 
                     let first = true;
                     data.forEach(function (i) {
-                        console.log(i);
                         let opts = {
-                            maxZoom: i.max_zoom,
-                            minZoom: i.min_zoom
+                            maxZoom: i.max_zoom || 21,
+                            minZoom: i.min_zoom || 1,
                         };
 
                         if (i.parts) {
                             opts["subdomains"] = i.parts;
                         }
+
+                        console.log(opts);
 
                         let l = L.tileLayer(i.url, opts);
 
@@ -98,7 +99,7 @@ const app = Vue.createApp({
         },
 
         onZoom: function (e) {
-            this.zoom = e.target.getZoom();
+            this.zoom = map.getZoom();
         },
 
         copy_up: function () {
