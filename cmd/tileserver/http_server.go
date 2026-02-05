@@ -108,21 +108,21 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 		name, _ := url.QueryUnescape(c.Params("name"))
 
 		if zoom, err = c.ParamsInt("zoom"); err != nil {
-			return fmt.Errorf("error: invalid zoom value")
+			return fiber.NewError(fiber.StatusBadRequest, "error: invalid zoom value")
 		}
 
 		if x, err = c.ParamsInt("x"); err != nil {
-			return fmt.Errorf("error: invalid x value")
+			return fiber.NewError(fiber.StatusBadRequest, "error: invalid x value")
 		}
 
 		if y, err = c.ParamsInt("y"); err != nil {
-			return fmt.Errorf("error: invalid y value")
+			return fiber.NewError(fiber.StatusBadRequest, "error: invalid y value")
 		}
 
 		layer, _ := app.layers.Get(name)
 
 		if layer == nil {
-			return c.Status(fiber.StatusNotFound).SendString(fmt.Sprintf("layer %s is not found", name))
+			return fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("layer %s is not found", name))
 		}
 
 		ct, data, err := layer.GetTile(c.Context(), zoom, x, y)
@@ -134,14 +134,14 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 
 		if data != nil {
 			c.Set("Content-Type", ct)
-			_, err := c.Write(data)
-			if err != nil {
-				app.logger.Error("error writing response", "error", err)
+			_, err1 := c.Write(data)
+			if err1 != nil {
+				app.logger.Error("error writing response", "error", err1)
 			}
 
-			return err
+			return err1
 		}
 
-		return c.Status(fiber.StatusNotFound).SendString("not found")
+		return fiber.ErrNotFound
 	}
 }
