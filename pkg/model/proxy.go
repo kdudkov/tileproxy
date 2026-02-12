@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log/slog"
@@ -45,6 +46,7 @@ func (p *Proxy) Init() {
 		Timeout: time.Second * 10,
 		Transport: &http.Transport{
 			ResponseHeaderTimeout: p.httpTimeout,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 			//MaxConnsPerHost:       4,
 		},
 	}
@@ -100,29 +102,29 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error
 
 	logger := p.logger.With("zoom", strconv.Itoa(z))
 
-	fpath := path.Join(p.path, fmt.Sprintf("z%d/%d/x%d/%d", z, int(x/1024), x, int(y/1024)))
+	fpath := path.Join(p.path, fmt.Sprintf("z%d/%d/x%d/%d", z, x/1024, x, y/1024))
 	fname := fmt.Sprintf("y%d.%s", y, p.ext)
 
 	st, err := os.Stat(path.Join(fpath, fname))
 
 	if err != nil {
 		logger.Debug("miss")
-		b, err :=  p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
-		
+		b, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+
 		return p.GetContentType(), b, err
 	}
 
 	if p.timeout == 0 || st.ModTime().Add(p.timeout).After(time.Now()) {
 		logger.Debug("hit")
-		b, err :=   os.ReadFile(path.Join(fpath, fname))
-		
+		b, err := os.ReadFile(path.Join(fpath, fname))
+
 		return p.GetContentType(), b, err
 	}
 
 	if rand.Float32() < p.keepProbability {
 		logger.Debug("keep")
-		b, err :=   os.ReadFile(path.Join(fpath, fname))
-		
+		b, err := os.ReadFile(path.Join(fpath, fname))
+
 		return p.GetContentType(), b, err
 	}
 
@@ -131,8 +133,8 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error
 
 	// backup - return file if any
 	if err != nil {
-		b, err :=   os.ReadFile(path.Join(fpath, fname))
-		
+		b, err := os.ReadFile(path.Join(fpath, fname))
+
 		return p.GetContentType(), b, err
 	}
 
@@ -177,19 +179,9 @@ func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) (
 		return nil, err
 	}
 
-	fl, err := os.Create(path.Join(fpath, fname))
+	err2 := os.WriteFile(path.Join(fpath, fname), data, 0644)
 
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = fl.Write(data); err != nil {
-		return data, err
-	}
-
-	fl.Close()
-
-	return data, nil
+	return data, err2
 }
 
 func (p *Proxy) GetUrl(z, x, y int) string {

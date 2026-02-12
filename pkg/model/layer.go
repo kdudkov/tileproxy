@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -65,6 +66,8 @@ func NewLayer(key, path string) (*Layer, error) {
 		return nil, err
 	}
 
+	l.GetBorders()
+
 	if v, ok := l.meta["minzoom"]; ok {
 		if vv, err := strconv.Atoi(v); err == nil {
 			l.minZoom = vv
@@ -103,10 +106,9 @@ func (l *Layer) GetContentType() string {
 			return "image/png"
 		}
 	}
-	
+
 	return "image/png"
 }
-
 
 func (l *Layer) String() string {
 	return fmt.Sprintf("%s %d:%d %v %v %+v", l.name, l.minZoom, l.maxZoom, l.tms, l.modTime, l.meta)
@@ -179,7 +181,37 @@ func (l *Layer) getMinMaxZoom() (int, int, error) {
 	return zmin, zmax, nil
 }
 
-func (l *Layer) GetTile(ctx context.Context, zoom, x, y int) (string, []byte, error) {
+func (l *Layer) GetBorders() {
+	m, _, err := l.getMinMaxZoom()
+
+	if err != nil {
+		return
+	}
+
+	row, err := l.db.Query("SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column) FROM tiles where zoom_level=?", m)
+
+	if err != nil {
+		return
+	}
+
+	var ymin, ymax, xmin, xmax int
+
+	if l.tms {
+		ymin = 1<<m - ymin - 1
+		ymax = 1<<m - ymax - 1
+	}
+
+	defer row.Close()
+	if row.Next() {
+		if err = row.Scan(&ymin, &ymax, &xmin, &xmax); err != nil {
+			return
+		}
+	}
+
+	slog.Info(fmt.Sprintf("%s: zoom %d, %d,%d - %d,%d", l.name, m, xmin, ymin, xmax, ymax))
+}
+
+func (l *Layer) GetTile(_ context.Context, zoom, x, y int) (string, []byte, error) {
 	if l.tms {
 		y = 1<<zoom - y - 1
 	}

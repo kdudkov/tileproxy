@@ -34,10 +34,3 @@
   keepProbability: 0.8
   tileType: png
   url: "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&projection=web_mercator&lang=ru_RU"
-- key: ggc250
-  name: GGC 250
-  url: "https://{s}.tiles.nakarte.me/ggc250/{z}/{y}/{x}"
-  tileType: png
-  serverParts: [ "a", "b", "c" ]
-  minZoom: 10
-  maxZoom: 17

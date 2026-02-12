@@ -129,7 +129,7 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 
 		if err != nil {
 			app.logger.Error("error getting tile", "error", err)
-			return err
+			return fiber.NewError(fiber.StatusNotFound, "error getting tile")
 		}
 
 		if data != nil {
