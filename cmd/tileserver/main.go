@@ -19,18 +19,18 @@ import (
 )
 
 type App struct {
-	addr       string
-	filesDir   string
-	cacheDir   string
-	logger     *slog.Logger
-	layers     *Layers
+	addr     string
+	filesDir string
+	cacheDir string
+	logger   *slog.Logger
+	layers   *Layers
 }
 
 func NewApp(addr string) *App {
 	return &App{
-		layers:     NewLayers(),
-		logger:     slog.Default(),
-		addr:       addr,
+		layers: NewLayers(),
+		logger: slog.Default(),
+		addr:   addr,
 	}
 }
 
@@ -62,10 +62,10 @@ func (app *App) addFileSources() error {
 	}
 
 	app.layers.RemoveFiles()
-	
+
 	for _, f := range files {
 		p := path.Join(app.filesDir, f.Name())
-		
+
 		if f.IsDir() {
 			app.addMultiFiles(f.Name(), p)
 		}
@@ -97,12 +97,12 @@ func (app *App) addMultiFiles(name, dpath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	layers := make([]*model.Layer, 0)
-	
+
 	for _, f := range files {
 		p := path.Join(dpath, f.Name())
-		
+
 		if f.IsDir() {
 			continue
 		}
@@ -110,28 +110,28 @@ func (app *App) addMultiFiles(name, dpath string) error {
 		if !strings.HasSuffix(f.Name(), ".mbtiles") && !strings.HasSuffix(f.Name(), ".sqlite") {
 			continue
 		}
-		
+
 		l, err := model.NewLayer(f.Name(), p)
-		
+
 		if err != nil {
 			app.logger.Error("db open error", "error", err)
 			continue
 		}
-		
+
 		layers = append(layers, l)
 	}
-	
+
 	if len(layers) == 0 {
 		return nil
 	}
-	
+
 	slices.SortFunc(layers, func(l1, l2 *model.Layer) int {
 		return strings.Compare(l1.GetName(), l2.GetName())
 	})
-	
+
 	app.layers.Add(model.NewMultilayer(name, name, layers))
 	app.logger.Info(fmt.Sprintf("loaded multilayer %s, %d files", name, len(layers)))
-	
+
 	return nil
 }
 

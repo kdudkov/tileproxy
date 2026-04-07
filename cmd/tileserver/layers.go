@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+
 	"github.com/kdudkov/tileproxy/pkg/model"
 )
 
@@ -46,7 +47,7 @@ func (h *Layers) RemoveFiles() {
 		if c.IsFile() {
 			h.data.Delete(c.GetKey())
 		}
-		
+
 		return true
 	})
 }

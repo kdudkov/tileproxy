@@ -201,7 +201,7 @@ func (l *Layer) GetBorders() {
 		ymax = 1<<m - ymax - 1
 	}
 
-	defer row.Close()
+	defer row.Close() //nolint:errcheck
 	if row.Next() {
 		if err = row.Scan(&ymin, &ymax, &xmin, &xmax); err != nil {
 			return
@@ -221,7 +221,7 @@ func (l *Layer) GetTile(_ context.Context, zoom, x, y int) (string, []byte, erro
 		return "", nil, err
 	}
 
-	defer row.Close()
+	defer row.Close() //nolint:errcheck
 
 	if row.Next() {
 		var data []byte

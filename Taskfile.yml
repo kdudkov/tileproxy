@@ -1,0 +1,89 @@
+version: '3'
+
+vars:
+  GIT_VERSION:
+    sh: git describe --always --tags --dirty
+  GIT_COMMIT:
+    sh: git rev-parse HEAD
+  GIT_BRANCH:
+    sh: git branch --show-current
+  LD: "-s -X main.version={{.GIT_VERSION}} -X main.commit={{.GIT_COMMIT}} -X 'main.date={{now | date \"02.01.2006 15:04\"}}'"
+  L: "{{\"{{\"}}"
+  R: "{{\"}}\"}}"
+
+tasks:
+  default:
+    deps: [ precommit ]
+
+  tools:
+    desc: Install development tools
+    cmds:
+      - go install golang.org/x/tools/cmd/goimports@latest
+
+  clean:
+    desc: Clean dist directory
+    cmds:
+      - mkdir -p dist
+      - rm -rf dist/* || true
+
+  dep:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
+  update:
+    desc: Update dependencies
+    cmds:
+      - rm go.sum || true
+      - go get -u ./...
+      - go mod tidy
+
+  test:
+    desc: Run tests
+    deps: [ dep ]
+    cmds:
+      - go test ./...
+
+  test:verbose:
+    desc: Run tests
+    deps: [ dep ]
+    cmds:
+      - SQL_DEBUG=1 go test -v ./...
+
+  build:
+    desc: Build the application
+    deps: [ clean, dep ]
+    cmds:
+      - go build -ldflags "{{.LD}}" -o dist/ ./cmd/...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  lint:new:
+    desc: Run golangci-lint on new changes
+    cmds:
+      - golangci-lint run ./... --new-from-rev $(git rev-parse HEAD^^^^^)
+
+  format:
+    desc: Format code
+    cmds:
+      - gofmt -s -w .
+      - goimports -w  .
+
+  precommit:
+    cmds:
+      - task: format
+      - task: lint:new
+      - task: test
+
+  gox:
+    desc: Cross-compile for multiple platforms
+    deps: [ clean, dep ]
+    cmds:
+      - GOARM=6 gox --osarch="linux/amd64 windows/amd64 darwin/arm64" -output 'dist/{{.L}}.OS{{.R}}_{{.L}}.Arch{{.R}}/{{.L}}.Dir{{.R}}' -ldflags "{{.LD}}" ./cmd/...
+
+  run:
+    deps: [ dep ]
+    cmd: go run ./cmd/tileserver/...
