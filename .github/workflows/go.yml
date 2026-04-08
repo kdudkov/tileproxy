@@ -14,12 +14,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.24'
-
+        go-version: '1.26'
+    
+    - name: Install Task
+      uses: go-task/setup-task@v1
+      
     - name: Test
-      run: make test
+      run: task test
