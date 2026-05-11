@@ -1,12 +1,11 @@
-FROM golang:1.26-alpine as builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 RUN apk update && apk upgrade && apk add --update alpine-sdk && \
     apk add --no-cache bash git go-task-task
 COPY . .
-RUN make build
+RUN task build
 
-# Execution stage
 FROM scratch
 WORKDIR /app/
 COPY --from=builder /app/dist/tileserver .
