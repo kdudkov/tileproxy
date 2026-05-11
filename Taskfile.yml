@@ -64,7 +64,10 @@ tasks:
   lint:new:
     desc: Run golangci-lint on new changes
     cmds:
-      - golangci-lint run ./... --new-from-rev $(git rev-parse HEAD^^^^^)
+      - cmd: golangci-lint run ./... --new-from-rev $(git rev-parse HEAD^^^)
+        if: '{{eq .GIT_BRANCH "master"}}'
+      - cmd: golangci-lint run ./... --new-from-rev $(git rev-parse master)
+        if: '{{ne .GIT_BRANCH "master"}}'
 
   format:
     desc: Format code
