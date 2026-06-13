@@ -115,6 +115,7 @@ func (app *App) Run() error {
 	close(ch)
 	wg1.Wait()
 	close(fnchan)
+	_ = bar.Finish()
 	wg.Wait()
 
 	zmin, zmax, err := getZoom(db)
@@ -294,7 +295,7 @@ func putMeta(db *sql.DB, meta map[string]string) error {
 }
 
 func main() {
-	var dir = flag.String("path", ".", "mbtiles path")
+	var dir = flag.String("path", "data", "mbtiles path")
 	var layer = flag.String("layer", "", "layer")
 	var mapName = flag.String("map_name", "", "")
 	var flagTitle = flag.String("title", "", "")

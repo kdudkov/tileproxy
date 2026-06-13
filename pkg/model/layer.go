@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -81,7 +82,7 @@ func NewLayer(key, path string) (*Layer, error) {
 	}
 
 	if v, ok := l.meta["scheme"]; ok {
-		if v != "tms" {
+		if strings.ToLower(v) != "tms" {
 			l.tms = false
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -212,22 +211,6 @@ func (app *App) loop() {
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigc
-}
-
-func getLocalAddr() []string {
-	var res []string
-
-	addresses, _ := net.InterfaceAddrs()
-
-	for _, a := range addresses {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil && !strings.HasPrefix(ipnet.IP.String(), "169.254.") {
-				res = append(res, ipnet.IP.String())
-			}
-		}
-	}
-
-	return res
 }
 
 func main() {

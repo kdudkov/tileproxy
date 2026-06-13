@@ -20,8 +20,8 @@ curl -L https://unpkg.com/vue@3/dist/vue.global.prod.js -o $d/js/vue.js
 curl https://cdn.jsdelivr.net/npm/leaflet@1.9/dist/leaflet.min.css -o $d/css/leaflet.css
 curl https://cdn.jsdelivr.net/npm/leaflet@1.9/dist/leaflet.min.js -o $d/js/leaflet.js
 
-for name in layers layers-2x marker-icon marker-icon-2x marker-shadow; do
-  curl https://unpkg.com/leaflet@1.9/dist/images/${name}.png -o $d/css/images/${name}.png
-done;
+#for name in layers layers-2x marker-icon marker-icon-2x marker-shadow; do
+#  curl https://unpkg.com/leaflet@1.9/dist/images/${name}.png -o $d/css/images/${name}.png
+#done;
 
 
