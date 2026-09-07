@@ -285,3 +285,58 @@ html, body {
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+#polygon-control {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    z-index: 500;
+    background: rgba(33, 37, 41, 0.85);
+    color: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    font-family: 'Roboto', sans-serif;
+    font-size: 10pt;
+    min-width: 180px;
+}
+
+#polygon-control button {
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10pt;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+#polygon-control button:last-child {
+    margin-bottom: 0;
+}
+
+#polygon-control button:hover {
+    opacity: 0.9;
+}
+
+#polygon-control .btn-primary {
+    background-color: #3388ff;
+    color: #fff;
+}
+
+#polygon-control .btn-secondary {
+    background-color: #666;
+    color: #fff;
+}
+
+#polygon-control .btn-warning {
+    background-color: #ff9800;
+    color: #fff;
+}
+
+#polygon-control .btn-danger {
+    background-color: #ff3333;
+    color: #fff;
+}

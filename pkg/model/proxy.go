@@ -88,6 +88,12 @@ func (p *Proxy) IsFile() bool {
 }
 
 func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error) {
+	return p.GetTileFromURL(ctx, z, x, y, "")
+}
+
+// GetTileFromURL preserves the chosen upstream URL across queued retries, while using the cache.
+// An empty URL selects a server using the layer configuration.
+func (p *Proxy) GetTileFromURL(ctx context.Context, z, x, y int, url string) (string, []byte, error) {
 	if z < p.minZoom || z > p.maxZoom {
 		return "", nil, fmt.Errorf("invalid zoom")
 	}
@@ -100,6 +106,9 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error
 		y = 1<<z - y - 1
 	}
 
+	if url == "" {
+		url = p.GetUrl(z, x, y)
+	}
 	logger := p.logger.With("zoom", strconv.Itoa(z))
 
 	fpath := path.Join(p.path, fmt.Sprintf("z%d/%d/x%d/%d", z, x/1024, x, y/1024))
@@ -109,7 +118,7 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error
 
 	if err != nil {
 		logger.Debug("miss")
-		b, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+		b, err := p.download(ctx, url, fpath, fname)
 
 		return p.GetContentType(), b, err
 	}
@@ -129,7 +138,7 @@ func (p *Proxy) GetTile(ctx context.Context, z, x, y int) (string, []byte, error
 	}
 
 	logger.Debug("timeout")
-	data, err := p.download(ctx, p.GetUrl(z, x, y), fpath, fname)
+	data, err := p.download(ctx, url, fpath, fname)
 
 	// backup - return file if any
 	if err != nil {
@@ -160,15 +169,15 @@ func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) (
 		return nil, err
 	}
 
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s error %s\n", url, resp.Status)
-	}
-
 	if resp.Body == nil {
 		return nil, fmt.Errorf("nil body")
 	}
 
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%s error %s\n", url, resp.Status)
+	}
+
 	data, err := io.ReadAll(resp.Body)
 
 	if err != nil {

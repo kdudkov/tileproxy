@@ -4,5 +4,6 @@
 .vscode
 dist
 tiles
+*.geojson
 *.mbtiles
 *.sqlite
