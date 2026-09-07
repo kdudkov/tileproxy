@@ -9,8 +9,8 @@ function setup() {
     const downloads = [];
     const urls = [];
     const timers = [];
-    const layer = point => ({
-        point, events: {},
+    const layer = (point, options) => ({
+        point, options, events: {},
         addTo() {return this;},
         on(name, fn) {this.events[name] = fn; return this;},
         setLatLngs(points) {this.points = points;},
@@ -41,6 +41,37 @@ function setup() {
 }
 const points = coordinates => coordinates.map(([lng, lat]) => ({lng, lat}));
 const square = () => points([[0, 0], [4, 0], [4, 4], [0, 4]]);
+
+test('clicking the first vertex closes a valid draft without adding a duplicate point', () => {
+    const {app} = setup();
+    app.toggleDrawing();
+    for (const p of square()) app.addPolygonPoint(p);
+    const first = app.markers[0];
+    assert.equal(first.options.interactive, true);
+    assert.equal(first.options.bubblingMouseEvents, false);
+    assert.ok(app.markers.slice(1).every(m => !m.options.interactive));
+    first.events.click();
+    assert.equal(app.drawingMode, false);
+    assert.equal(app.polygonError, '');
+    assert.deepEqual(JSON.parse(JSON.stringify(app.polygonPoints)), square());
+});
+
+test('clicking the first vertex preserves drafts with too few points or an invalid closing edge', () => {
+    for (const coordinates of [
+        [[0, 0]],
+        [[0, 0], [4, 0]],
+        [[0, 0], [4, 0], [0, 4], [4, 4]]
+    ]) {
+        const {app} = setup();
+        app.toggleDrawing();
+        const draft = points(coordinates);
+        for (const p of draft) app.addPolygonPoint(p);
+        app.markers[0].events.click();
+        assert.equal(app.drawingMode, true);
+        assert.ok(app.polygonError);
+        assert.deepEqual(JSON.parse(JSON.stringify(app.polygonPoints)), draft);
+    }
+});
 
 test('rejects crossings, touches, overlaps, duplicates and degenerate rings', () => {
     const {geometry} = setup();
@@ -87,7 +118,7 @@ test('invalid drag and duplicate insertion preserve the valid contour', () => {
     const marker = app.markers[1];
     marker.point = {lng: -1, lat: 3};
     marker.events.drag({target: marker});
-    assert.deepEqual(app.polygonPoints, square());
+    assert.deepEqual(JSON.parse(JSON.stringify(app.polygonPoints)), square());
     assert.deepEqual(marker.point, square()[1]);
     assert.ok(app.polygonError);
     marker.point = {lng: 5, lat: 0};

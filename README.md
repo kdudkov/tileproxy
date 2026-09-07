@@ -15,7 +15,7 @@ tileserver -addr :8080 -files ./files -cache ./cache
 ```
 
 Open `/map`, click **Нарисовать полигон**, and place vertices on the map.
-Click **Завершить** to close the contour. Invalid edges or edits are rejected;
+Click the first vertex or **Завершить** to close the contour. Invalid edges or edits are rejected;
 use **Удалить последнюю точку** to correct a draft. Drag a vertex to move it,
 or click the completed polygon to insert a vertex near the closest edge.
 **Скачать GeoJSON** downloads `contour.geojson`: one GeoJSON Polygon with a

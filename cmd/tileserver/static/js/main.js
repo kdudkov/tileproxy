@@ -28,9 +28,6 @@ const app = Vue.createApp({
 
         map.setView([60, 30.8], this.zoom);
 
-        grid = new L.GridLayer({tileSize: 256 / (1 << this.dz), zIndex: 0});
-        grid.createTile = this.draw_tile;
-
         this.get_layers();
         map.on('click', this.onClick);
         map.on('zoomend', this.onZoom);
@@ -75,20 +72,6 @@ const app = Vue.createApp({
                     th.layers.addOverlay(grid, "grid");
                     grid.bringToFront();
                 });
-        },
-
-        draw_tile: function (coords) {
-            let key = [coords.z + this.dz, coords.x, coords.y].join('/');
-
-            const tile = document.createElement('div');
-
-            tile.style.outline = '1px solid green';
-            if (this.keys.has(key)) {
-                tile.style.backgroundColor = 'rgba(255,0,0,0.1)';
-            }
-            tile.style.fontSize = '6pt';
-            // tile.innerHTML = key;
-            return tile;
         },
 
         onClick: function (e) {
@@ -201,11 +184,13 @@ const app = Vue.createApp({
                 }
             }
             if (this.drawingMode) {
-                this.polygonPoints.forEach(point => {
-                    this.markers.push(Vue.markRaw(L.circleMarker(point, {
+                this.polygonPoints.forEach((point, index) => {
+                    const marker = Vue.markRaw(L.circleMarker(point, {
                         radius: 8, fillColor: '#3388ff', color: '#fff', weight: 2,
-                        fillOpacity: 0.8, interactive: false
-                    }).addTo(map)));
+                        fillOpacity: 0.8, interactive: index === 0, bubblingMouseEvents: false
+                    }).addTo(map));
+                    if (index === 0) marker.on('click', () => this.closePolygon());
+                    this.markers.push(marker);
                 });
             } else {
                 this.makeDraggable();
