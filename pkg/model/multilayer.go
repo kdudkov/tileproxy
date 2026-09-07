@@ -1,6 +1,9 @@
 package model
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 var _ Source = &MultiLayer{}
 
@@ -40,6 +43,14 @@ func (m *MultiLayer) init() {
 
 func (m *MultiLayer) GetKey() string {
 	return m.key
+}
+
+func (m *MultiLayer) Close() error {
+	var err error
+	for _, l := range m.layers {
+		err = errors.Join(err, l.Close())
+	}
+	return err
 }
 
 func (m *MultiLayer) GetMaxZoom() int {

@@ -80,3 +80,46 @@ func TestQueuedURLIsPreservedAcrossRetries(t *testing.T) {
 		t.Fatal("cache hit repeated HTTP request")
 	}
 }
+
+func TestCacheReplacementIsAtomic(t *testing.T) {
+	dir := t.TempDir()
+	name := filepath.Join(dir, "tile.png")
+	if err := os.WriteFile(name, []byte("old tile"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if err := writeCacheFile(name, []byte("new tile")); err != nil {
+		t.Fatal(err)
+	}
+	old, err := io.ReadAll(reader)
+	if err != nil || string(old) != "old tile" {
+		t.Fatalf("active reader saw %q: %v", old, err)
+	}
+	current, err := os.ReadFile(name)
+	if err != nil || string(current) != "new tile" {
+		t.Fatalf("new reader saw %q: %v", current, err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Fatalf("temporary files remain: %v", entries)
+	}
+}
+
+func TestFailedCachePublishRemovesTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "tile.png")
+	if err := os.Mkdir(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeCacheFile(target, []byte("tile")); err == nil {
+		t.Fatal("expected rename to fail")
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "tile.png" || !entries[0].IsDir() {
+		t.Fatalf("destination changed or temporary files remain: %v", entries)
+	}
+}

@@ -188,9 +188,28 @@ func (p *Proxy) download(ctx context.Context, url string, fpath, fname string) (
 		return nil, err
 	}
 
-	err2 := os.WriteFile(path.Join(fpath, fname), data, 0644)
+	err2 := writeCacheFile(path.Join(fpath, fname), data)
 
 	return data, err2
+}
+
+func writeCacheFile(filename string, data []byte) error {
+	file, err := os.CreateTemp(path.Dir(filename), ".tile-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	if err := file.Chmod(0644); err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), filename)
 }
 
 func (p *Proxy) GetUrl(z, x, y int) string {

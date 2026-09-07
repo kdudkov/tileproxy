@@ -119,7 +119,8 @@ func getTileHandler(app *App) func(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "error: invalid y value")
 		}
 
-		layer, _ := app.layers.Get(name)
+		layer, release := app.layers.Acquire(name)
+		defer release()
 
 		if layer == nil {
 			return fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("layer %s is not found", name))

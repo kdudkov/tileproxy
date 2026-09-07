@@ -59,11 +59,13 @@ func NewLayer(key, path string) (*Layer, error) {
 	}
 
 	if err := l.getMetadata(); err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	l.minZoom, l.maxZoom, err = l.getMinMaxZoom()
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -92,6 +94,10 @@ func NewLayer(key, path string) (*Layer, error) {
 	}
 
 	return l, nil
+}
+
+func (l *Layer) Close() error {
+	return l.db.Close()
 }
 
 func (l *Layer) GetContentType() string {

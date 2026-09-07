@@ -1,63 +1,87 @@
 package main
 
 import (
+	"io"
+	"log/slog"
 	"sync"
 
 	"github.com/kdudkov/tileproxy/pkg/model"
 )
 
-func NewLayers() *Layers {
-	return &Layers{
-		data: sync.Map{},
-	}
-}
+func NewLayers() *Layers { return &Layers{data: make(map[string]model.Source)} }
 
 type Layers struct {
-	data sync.Map
+	mu   sync.RWMutex
+	data map[string]model.Source
+}
+
+func closeSource(source model.Source) {
+	if closer, ok := source.(io.Closer); ok {
+		if err := closer.Close(); err != nil {
+			slog.Error("close layer", "layer", source.GetKey(), "error", err)
+		}
+	}
 }
 
 func (h *Layers) Clear() {
-	h.data.Clear()
-}
-
-func (h *Layers) Get(key string) (model.Source, bool) {
-	if v, ok := h.data.Load(key); ok {
-		if n, ok1 := v.(model.Source); ok1 {
-			return n, true
-		}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for key, source := range h.data {
+		closeSource(source)
+		delete(h.data, key)
 	}
-
-	return nil, false
 }
 
-func (h *Layers) Add(c model.Source) {
-	if c == nil {
+// Acquire pins the source until release is called, so reload cannot close an active reader.
+// ponytail: a shared read lock keeps reload simple; per-layer leases if slow requests delay reloads.
+func (h *Layers) Acquire(key string) (model.Source, func()) {
+	h.mu.RLock()
+	return h.data[key], h.mu.RUnlock
+}
+
+func (h *Layers) Add(source model.Source) {
+	if source == nil {
 		return
 	}
-
-	h.data.Store(c.GetKey(), c)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if old := h.data[source.GetKey()]; old != nil && old != source {
+		closeSource(old)
+	}
+	h.data[source.GetKey()] = source
 }
 
 func (h *Layers) Remove(key string) {
-	h.data.Delete(key)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	closeSource(h.data[key])
+	delete(h.data, key)
 }
 
-func (h *Layers) RemoveFiles() {
-	h.All(func(c model.Source) bool {
-		if c.IsFile() {
-			h.data.Delete(c.GetKey())
+// ReplaceFiles publishes the new set together, after active readers release the old set.
+func (h *Layers) ReplaceFiles(sources []model.Source) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for key, source := range h.data {
+		if source.IsFile() {
+			closeSource(source)
+			delete(h.data, key)
 		}
-
-		return true
-	})
+	}
+	for _, source := range sources {
+		if old := h.data[source.GetKey()]; old != nil && old != source {
+			closeSource(old)
+		}
+		h.data[source.GetKey()] = source
+	}
 }
 
-func (h *Layers) All(f func(c model.Source) bool) {
-	h.data.Range(func(_, value any) bool {
-		if c, ok := value.(model.Source); ok {
-			return f(c)
+func (h *Layers) All(f func(model.Source) bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, source := range h.data {
+		if !f(source) {
+			return
 		}
-
-		return true
-	})
+	}
 }

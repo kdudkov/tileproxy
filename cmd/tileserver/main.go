@@ -60,13 +60,19 @@ func (app *App) addFileSources() error {
 		return err
 	}
 
-	app.layers.RemoveFiles()
+	sources := make([]model.Source, 0, len(files))
 
 	for _, f := range files {
 		p := path.Join(app.filesDir, f.Name())
 
 		if f.IsDir() {
-			app.addMultiFiles(f.Name(), p)
+			layer, err := app.addMultiFiles(f.Name(), p)
+			if err != nil {
+				app.logger.Error("load multilayer", "error", err)
+			} else if layer != nil {
+				sources = append(sources, layer)
+			}
+			continue
 		}
 
 		if !strings.HasSuffix(f.Name(), ".mbtiles") && !strings.HasSuffix(f.Name(), ".sqlite") {
@@ -84,17 +90,18 @@ func (app *App) addFileSources() error {
 			continue
 		}
 
-		app.layers.Add(l)
+		sources = append(sources, l)
 		app.logger.Info(fmt.Sprintf("loaded file %s, %s", f.Name(), l.String()))
 	}
 
+	app.layers.ReplaceFiles(sources)
 	return nil
 }
 
-func (app *App) addMultiFiles(name, dpath string) error {
+func (app *App) addMultiFiles(name, dpath string) (model.Source, error) {
 	files, err := os.ReadDir(dpath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	layers := make([]*model.Layer, 0)
@@ -121,20 +128,21 @@ func (app *App) addMultiFiles(name, dpath string) error {
 	}
 
 	if len(layers) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	slices.SortFunc(layers, func(l1, l2 *model.Layer) int {
 		return strings.Compare(l1.GetName(), l2.GetName())
 	})
 
-	app.layers.Add(model.NewMultilayer(name, name, layers))
+	layer := model.NewMultilayer(name, name, layers)
 	app.logger.Info(fmt.Sprintf("loaded multilayer %s, %d files", name, len(layers)))
 
-	return nil
+	return layer, nil
 }
 
 func (app *App) Run() {
+	defer app.close()
 	if err := os.MkdirAll(app.cacheDir, 0777); err != nil {
 		panic(err)
 	}
@@ -166,7 +174,8 @@ func (app *App) Run() {
 
 	defer watcher.Close()
 
-	go app.watch(watcher)
+	watchDone := make(chan struct{})
+	go func() { defer close(watchDone); app.watch(watcher) }()
 
 	err = watcher.Add(app.filesDir)
 	if err != nil {
@@ -174,7 +183,11 @@ func (app *App) Run() {
 	}
 
 	app.loop()
-	app.close()
+	_ = watcher.Close()
+	<-watchDone
+	if err := http.Shutdown(); err != nil {
+		app.logger.Error("shutdown HTTP", "error", err)
+	}
 }
 
 func (app *App) watch(watcher *fsnotify.Watcher) {
@@ -203,7 +216,7 @@ func (app *App) watch(watcher *fsnotify.Watcher) {
 }
 
 func (app *App) close() {
-
+	app.layers.Clear()
 }
 
 func (app *App) loop() {
